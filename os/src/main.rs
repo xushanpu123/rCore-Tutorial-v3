@@ -23,7 +23,10 @@
 extern crate polyhal;
 
 use core::arch::global_asm;
+use buddy_system_allocator::LockedHeap;
 
+#[global_allocator]
+static HEAP_ALLOCATOR: LockedHeap = LockedHeap::empty();
 //use log::*;
 #[macro_use]
 mod console;
