@@ -31,60 +31,51 @@ mod logging;
 mod sbi;
 mod sync;
 pub mod syscall;
-pub mod trap;
-
-global_asm!(include_str!("entry.asm"));
+use crate::batch::*;
+use polyhal::{TrapFrame, TrapFrameArgs, TrapType};
 global_asm!(include_str!("link_app.S"));
 
-/// clear BSS segment
-fn clear_bss() {
-    extern "C" {
-        fn sbss();
-        fn ebss();
-    }
-    unsafe {
-        core::slice::from_raw_parts_mut(sbss as usize as *mut u8, ebss as usize - sbss as usize)
-            .fill(0);
+/// kernel interrupt
+#[polyhal::arch_interrupt]
+fn kernel_interrupt(ctx: &mut TrapFrame, trap_type: TrapType) {
+    // println!("trap_type @ {:x?} {:#x?}", trap_type, ctx);
+    match trap_type {
+        UserEnvCall => {
+            // jump to next instruction anyway
+            ctx.syscall_ok();
+            let args = ctx.args();
+            // get system call return value
+            // info!("syscall: {}", ctx[TrapFrameArgs::SYSCALL]);
+
+            let result = syscall(ctx[TrapFrameArgs::SYSCALL], [args[0], args[1], args[2]]);
+            // cx is changed during sys_exec, so we have to call it again
+            ctx[TrapFrameArgs::RET] = result as usize;
+        }
+        StorePageFault(_paddr) | LoadPageFault(_paddr) | InstructionPageFault(_paddr) => {
+            /*
+            println!(
+                "[kernel] {:?} in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.",
+                scause.cause(),
+                stval,
+                current_trap_cx().sepc,
+            );
+            */
+            println!("[kernel] PageFault in application, kernel killed it.");
+            run_next_app();
+        }
+        IllegalInstruction(_) => {
+            println!("[kernel] IllegalInstruction in application, kernel killed it.");
+            run_next_app();
+        }
+        _ => {
+            panic!("unsuspended trap type: {:?}", trap_type);
+        }
     }
 }
 
 /// the rust entry-point of os
 #[no_mangle]
 pub fn rust_main() -> ! {
-    extern "C" {
-        fn stext(); // begin addr of text segment
-        fn etext(); // end addr of text segment
-        fn srodata(); // start addr of Read-Only data segment
-        fn erodata(); // end addr of Read-Only data ssegment
-        fn sdata(); // start addr of data segment
-        fn edata(); // end addr of data segment
-        fn sbss(); // start addr of BSS segment
-        fn ebss(); // end addr of BSS segment
-        fn boot_stack_lower_bound(); // stack lower bound
-        fn boot_stack_top(); // stack top
-    }
-    clear_bss();
-    logging::init();
-    println!("[kernel] Hello, world!");
-    trace!(
-        "[kernel] .text [{:#x}, {:#x})",
-        stext as usize,
-        etext as usize
-    );
-    debug!(
-        "[kernel] .rodata [{:#x}, {:#x})",
-        srodata as usize, erodata as usize
-    );
-    info!(
-        "[kernel] .data [{:#x}, {:#x})",
-        sdata as usize, edata as usize
-    );
-    warn!(
-        "[kernel] boot_stack top=bottom={:#x}, lower_bound={:#x}",
-        boot_stack_top as usize, boot_stack_lower_bound as usize
-    );
-    error!("[kernel] .bss [{:#x}, {:#x})", sbss as usize, ebss as usize);
-    trap::init();
     batch::init();
     batch::run_next_app();
 }
