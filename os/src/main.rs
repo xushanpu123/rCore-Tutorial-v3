@@ -20,9 +20,11 @@
 #![no_main]
 #![feature(panic_info_message)]
 
+extern crate polyhal;
+
 use core::arch::global_asm;
 
-use log::*;
+//use log::*;
 #[macro_use]
 mod console;
 pub mod batch;
@@ -31,8 +33,10 @@ mod logging;
 mod sbi;
 mod sync;
 pub mod syscall;
+use crate::syscall::syscall;
 use crate::batch::*;
 use polyhal::{TrapFrame, TrapFrameArgs, TrapType};
+use polyhal::TrapType::*;
 global_asm!(include_str!("link_app.S"));
 
 /// kernel interrupt
@@ -74,8 +78,12 @@ fn kernel_interrupt(ctx: &mut TrapFrame, trap_type: TrapType) {
 }
 
 /// the rust entry-point of os
-#[no_mangle]
-pub fn rust_main() -> ! {
+#[polyhal::arch_entry]
+fn main(hartid: usize) {
+    if hartid != 0 {
+        return;
+    }
+    println!("[kernel] Hello, world!");
     batch::init();
     batch::run_next_app();
 }

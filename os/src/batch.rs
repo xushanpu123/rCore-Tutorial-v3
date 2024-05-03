@@ -2,7 +2,7 @@
 
 use crate::sbi::shutdown;
 use crate::sync::UPSafeCell;
-use crate::trap::TrapContext;
+use crate::polyhal::TrapContext;
 use core::arch::asm;
 use lazy_static::*;
 
