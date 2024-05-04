@@ -14,38 +14,60 @@
 //! We then call [`batch::run_next_app()`] and for the first time go to
 //! userspace.
 
-#![deny(missing_docs)]
-#![deny(warnings)]
+//#![deny(missing_docs)]
+//#![deny(warnings)]
 #![no_std]
 #![no_main]
 #![feature(panic_info_message)]
+#![feature(alloc_error_handler)]
 
 extern crate polyhal;
-
+extern crate alloc;
+#[macro_use]
+extern crate bitflags;
 use core::arch::global_asm;
 use buddy_system_allocator::LockedHeap;
 
-#[global_allocator]
+#[global_allocator]            
 static HEAP_ALLOCATOR: LockedHeap = LockedHeap::empty();
 //use log::*;
 #[macro_use]
 mod console;
 pub mod batch;
+pub mod frame_allocater;
+pub mod heap_allocator;
 mod lang_items;
 mod logging;
-mod sbi;
 mod sync;
 pub mod syscall;
+pub mod config;
 use crate::syscall::syscall;
 use crate::batch::*;
-use polyhal::{TrapFrame, TrapFrameArgs, TrapType};
+pub use crate::frame_allocater::*;
+use polyhal::{get_mem_areas, PageAlloc, TrapFrame, TrapFrameArgs, TrapType};
+use polyhal::addr::PhysPage;
 use polyhal::TrapType::*;
+pub use heap_allocator::init_heap;
 global_asm!(include_str!("link_app.S"));
+
+pub struct PageAllocImpl;
+
+impl PageAlloc for PageAllocImpl {
+    #[inline]
+    fn alloc(&self) -> PhysPage {
+        frame_alloc_persist().expect("can't find memory page")
+    }
+
+    #[inline]
+    fn dealloc(&self, ppn: PhysPage) {
+        frame_dealloc(ppn)
+    }
+}
 
 /// kernel interrupt
 #[polyhal::arch_interrupt]
 fn kernel_interrupt(ctx: &mut TrapFrame, trap_type: TrapType) {
-    // println!("trap_type @ {:x?} {:#x?}", trap_type, ctx);
+    //println!("trap_type @ {:x?} {:#x?}", trap_type, ctx);
     match trap_type {
         UserEnvCall => {
             // jump to next instruction anyway
@@ -59,20 +81,15 @@ fn kernel_interrupt(ctx: &mut TrapFrame, trap_type: TrapType) {
             ctx[TrapFrameArgs::RET] = result as usize;
         }
         StorePageFault(_paddr) | LoadPageFault(_paddr) | InstructionPageFault(_paddr) => {
-            /*
-            println!(
-                "[kernel] {:?} in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.",
-                scause.cause(),
-                stval,
-                current_trap_cx().sepc,
-            );
-            */
-            println!("[kernel] PageFault in application, kernel killed it.");
+            println!("[kernel] PageFault in application, kernel killed it. paddr={:x}",_paddr);
             run_next_app();
         }
         IllegalInstruction(_) => {
             println!("[kernel] IllegalInstruction in application, kernel killed it.");
             run_next_app();
+        }
+        Time => {
+            
         }
         _ => {
             panic!("unsuspended trap type: {:?}", trap_type);
@@ -87,6 +104,9 @@ fn main(hartid: usize) {
         return;
     }
     println!("[kernel] Hello, world!");
+    init_heap();
+    logging::init(Some("trace"));
+    polyhal::init(&PageAllocImpl);
     batch::init();
     batch::run_next_app();
 }

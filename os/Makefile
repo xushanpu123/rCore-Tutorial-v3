@@ -58,7 +58,9 @@ run: run-inner
 QEMU_ARGS := -machine virt \
 			 -nographic \
 			 -bios $(BOOTLOADER) \
-			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA)
+			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA) \
+			 -D qemu.log -d in_asm,int,pcall,cpu_reset,guest_errors
+
 
 run-inner: build
 	@qemu-system-riscv64 $(QEMU_ARGS)

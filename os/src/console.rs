@@ -17,6 +17,13 @@ pub fn print(args: fmt::Arguments) {
     Stdout.write_fmt(args).unwrap();
 }
 
+/// 打印给定表达式的值到标准输出。
+///
+/// # 使用示例
+///
+/// ```
+/// print!("Hello, world!");
+/// ```
 #[macro_export]
 macro_rules! print {
     ($fmt: literal $(, $($arg: tt)+)?) => {
@@ -24,6 +31,13 @@ macro_rules! print {
     }
 }
 
+/// 打印给定表达式的值到标准输出并换行。
+///
+/// # 使用示例
+///
+/// ```
+/// println!("Hello, world!");
+/// ```
 #[macro_export]
 macro_rules! println {
     ($fmt: literal $(, $($arg: tt)+)?) => {
