@@ -17,7 +17,6 @@
 //! We then call [`task::run_tasks()`] and for the first time go to
 //! userspace.
 
-#![deny(missing_docs)]
 #![deny(warnings)]
 #![no_std]
 #![no_main]
@@ -25,56 +24,101 @@
 #![feature(alloc_error_handler)]
 
 extern crate alloc;
+extern crate polyhal;
 
 #[macro_use]
 extern crate bitflags;
-
-#[path = "boards/qemu.rs"]
-mod board;
 
 #[macro_use]
 mod console;
 mod config;
 mod lang_items;
+mod logging;
+mod timer;
+#[path="boards/qemu.rs"]
+mod board;
 mod loader;
 pub mod mm;
-mod sbi;
 pub mod sync;
 pub mod syscall;
 pub mod task;
-mod timer;
-pub mod trap;
+
+use crate::syscall::syscall;
+use crate::task::{suspend_current_and_run_next, exit_current_and_run_next};
+use polyhal::{get_mem_areas, PageAlloc, TrapFrame, TrapFrameArgs, TrapType};
+use polyhal::addr::PhysPage;
+use polyhal::TrapType::*;
+use log::*;
 
 use core::arch::global_asm;
 
-global_asm!(include_str!("entry.asm"));
 global_asm!(include_str!("link_app.S"));
-/// clear BSS segment
-fn clear_bss() {
-    extern "C" {
-        fn sbss();
-        fn ebss();
-    }
-    unsafe {
-        core::slice::from_raw_parts_mut(sbss as usize as *mut u8, ebss as usize - sbss as usize)
-            .fill(0);
+
+#[polyhal::arch_interrupt]
+fn kernel_interrupt(ctx: &mut TrapFrame, trap_type: TrapType) {
+    match trap_type {
+        Breakpoint => return,
+        UserEnvCall => {
+            // jump to next instruction anyway
+            ctx.syscall_ok();
+            let args = ctx.args();
+            // get system call return value
+            // info!("syscall: {}", ctx[TrapFrameArgs::SYSCALL]);
+
+            let result = syscall(ctx[TrapFrameArgs::SYSCALL], [args[0], args[1], args[2]]);
+            // cx is changed during sys_exec, so we have to call it again
+            ctx[TrapFrameArgs::RET] = result as usize;
+        }
+        StorePageFault(_paddr) | LoadPageFault(_paddr) | InstructionPageFault(_paddr) => {
+            println!("[kernel] PageFault in application, kernel killed it. paddr={:x}",_paddr);
+            exit_current_and_run_next(-2);
+        }
+        IllegalInstruction(_) => {
+            println!("[kernel] IllegalInstruction in application, kernel killed it.");
+            exit_current_and_run_next(-2);
+        }
+        Time => {
+            suspend_current_and_run_next();
+        }
+        _ => {
+            panic!("unsuspended trap type: {:?}", trap_type);
+        }
     }
 }
 
-#[no_mangle]
-/// the rust entry-point of os
-pub fn rust_main() -> ! {
-    clear_bss();
+#[polyhal::arch_entry]
+pub fn main(hartid: usize){
+    trace!("ch5 main start: hartid: {}", hartid);
+    if hartid != 0 {
+        return;
+    }
     println!("[kernel] Hello, world!");
-    mm::init();
-    mm::remap_test();
+    mm::init_heap();
+    logging::init(Some("info"));
+    info!("[kernel] init logging success!");
+    polyhal::init(&PageAllocImpl);
+    get_mem_areas().into_iter().for_each(|(start, size)| {
+        println!("init memory region {:#x} - {:#x}", start, start + size);
+        mm::init_frame_allocator(start, start + size);
+    });
+
     task::add_initproc();
     println!("after initproc!");
-    trap::init();
-    //trap::enable_interrupt();
-    trap::enable_timer_interrupt();
-    timer::set_next_trigger();
     loader::list_apps();
     task::run_tasks();
-    panic!("Unreachable in rust_main!");
+    panic!("Unreachable in ch5 rust main!");
+}
+
+pub struct PageAllocImpl;
+
+impl PageAlloc for PageAllocImpl {
+    #[inline]
+    fn alloc(&self) -> PhysPage {
+        mm::frame_alloc_persist().expect("can't find memory page")
+    }
+
+    #[inline]
+    fn dealloc(&self, ppn: PhysPage) {
+        mm::frame_dealloc(ppn)
+    }
 }
