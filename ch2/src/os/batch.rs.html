@@ -178,11 +178,60 @@
 <a href="#176" id="176">176</a>
 <a href="#177" id="177">177</a>
 <a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! batch subsystem
 
-</span><span class="kw">use </span><span class="kw">crate</span>::sync::UPSafeCell;
+</span><span class="kw">use </span><span class="kw">crate</span>::config::PAGE_SIZE;
+<span class="kw">use </span><span class="kw">crate</span>::sync::UPSafeCell;
 <span class="kw">use </span>core::arch::asm;
 <span class="kw">use </span>lazy_static::<span class="kw-2">*</span>;
+<span class="kw">use </span>log::info;
 <span class="kw">use </span>polyhal::{TrapFrame,TrapFrameArgs,run_user_task,shutdown,VIRT_ADDR_START};
 <span class="kw">use </span>polyhal::pagetable::{MappingFlags, MappingSize, PageTable, PageTableWrapper};
 <span class="kw">use </span>polyhal::addr::<span class="kw-2">*</span>;
@@ -190,7 +239,7 @@
 <span class="kw">const </span>USER_STACK_SIZE: usize = <span class="number">4096 </span>* <span class="number">2</span>;
 <span class="kw">const </span>KERNEL_STACK_SIZE: usize = <span class="number">4096 </span>* <span class="number">2</span>;
 <span class="kw">const </span>MAX_APP_NUM: usize = <span class="number">16</span>;
-<span class="kw">const </span>APP_BASE_ADDRESS: usize = <span class="number">0x80400000 </span>;
+<span class="kw">const </span>APP_BASE_ADDRESS: usize = <span class="number">0x80400000</span>;
 <span class="kw">const </span>APP_SIZE_LIMIT: usize = <span class="number">0x20000</span>;
 
 <span class="macro">bitflags! </span>{
@@ -273,27 +322,33 @@
             <span class="macro">println!</span>(<span class="string">"All applications completed!"</span>);
             shutdown();
         }
+        <span class="kw">let </span>page_table = PageTable::current();
+        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">0x20 </span>{
+            page_table.map_page(VirtPage::from_addr(APP_BASE_ADDRESS + PAGE_SIZE * i), frame_alloc_persist().expect(<span class="string">"can't allocate frame"</span>), MappingFlags::URWX, MappingSize::Page4KB);
+        }
+        page_table.map_page(VirtPage::from_addr(<span class="number">0x1_8000_0000</span>), frame_alloc_persist().expect(<span class="string">"can't allocate frame"</span>), MappingFlags::URWX, MappingSize::Page4KB);
         <span class="macro">println!</span>(<span class="string">"[kernel] Loading app_{}"</span>, app_id);
+        <span class="macro">info!</span>(<span class="string">"app src: {:#x} size: {:#x}"</span>, <span class="self">self</span>.app_start[app_id], <span class="self">self</span>.app_start[app_id + <span class="number">1</span>] - <span class="self">self</span>.app_start[app_id]);
         <span class="comment">// clear app area
         </span>core::slice::from_raw_parts_mut(APP_BASE_ADDRESS <span class="kw">as </span><span class="kw-2">*mut </span>u8, APP_SIZE_LIMIT).fill(<span class="number">0</span>);
         <span class="kw">let </span>app_src = core::slice::from_raw_parts(
             <span class="self">self</span>.app_start[app_id] <span class="kw">as </span><span class="kw-2">*const </span>u8,
             <span class="self">self</span>.app_start[app_id + <span class="number">1</span>] - <span class="self">self</span>.app_start[app_id],
         );
+        <span class="macro">info!</span>(<span class="string">"app src: {:#x} size: {:#x}"</span>, <span class="self">self</span>.app_start[app_id], <span class="self">self</span>.app_start[app_id + <span class="number">1</span>] - <span class="self">self</span>.app_start[app_id]);
         <span class="kw">let </span>app_dst = core::slice::from_raw_parts_mut(APP_BASE_ADDRESS <span class="kw">as </span><span class="kw-2">*mut </span>u8, app_src.len());
         app_dst.copy_from_slice(app_src);
-        <span class="kw">let </span><span class="kw-2">mut </span>page_table = PageTable::current();
-        <span class="kw">let </span>vpn = VirtPage::from_addr(APP_BASE_ADDRESS);
-        <span class="kw">let </span>p_tracker = frame_alloc().expect(<span class="string">"can't allocate frame"</span>);
-        page_table.map_page(vpn, p_tracker.ppn,(MapPermission::U| MapPermission::R|MapPermission::W|MapPermission::X).into(), MappingSize::Page4KB);
-        <span class="comment">// Memory fence about fetching the instruction memory
+        <span class="comment">// hexdump(&amp;app_src);
+        // hexdump(&amp;app_dst);
+        // panic!("123");
+        // Memory fence about fetching the instruction memory
         // It is guaranteed that a subsequent instruction fetch must
         // observes all previous writes to the instruction memory.
         // Therefore, fence.i must be executed after we have loaded
         // the code of the next app into the instruction memory.
         // See also: riscv non-priv spec chapter 3, 'Zifencei' extension.
-        </span><span class="macro">asm!</span>(<span class="string">"fence.i"</span>);
-    }
+        // asm!("fence.i");
+    </span>}
 
     <span class="kw">pub fn </span>get_current_app(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.current_app
@@ -324,8 +379,15 @@
         })
     };
 }
+<span class="comment">/*
+[kernel] app_0 [0xffffffc080211038, 0xffffffc080212228)
+[kernel] app_1 [0xffffffc080212228, 0xffffffc0802134b8)
+[kernel] app_2 [0xffffffc0802134b8, 0xffffffc080214900)
+[kernel] app_3 [0xffffffc080214900, 0xffffffc080215b78)
+[kernel] app_4 [0xffffffc080215b78, 0xffffffc080216df0)
+*/
 
-<span class="doccomment">/// init batch subsystem
+</span><span class="doccomment">/// init batch subsystem
 </span><span class="kw">pub fn </span>init() {
     print_app_info();
 }
@@ -348,7 +410,7 @@
     // and release the resources
     </span><span class="kw">let </span><span class="kw-2">mut </span>trap_cx = TrapFrame::new();
     trap_cx[TrapFrameArgs::SEPC] = APP_BASE_ADDRESS;
-    trap_cx[TrapFrameArgs::SP] = USER_STACK.get_sp();
+    trap_cx[TrapFrameArgs::SP] = <span class="number">0x1_8000_0000 </span>+ PAGE_SIZE;
     <span class="kw">let </span>ctx_mut = <span class="kw">unsafe </span>{ (<span class="kw-2">&amp;mut </span>trap_cx <span class="kw">as </span><span class="kw-2">*mut </span>TrapFrame).as_mut().unwrap() };
     <span class="kw">loop </span>{
         run_user_task(ctx_mut);
@@ -356,4 +418,36 @@
     <span class="macro">panic!</span>(<span class="string">"Unreachable in batch::run_current_app!"</span>);
 }
 
+<span class="attr">#[no_mangle]
+</span><span class="kw">pub fn </span>hexdump(data: <span class="kw-2">&amp;</span>[u8]) {
+    <span class="kw">const </span>PRELAND_WIDTH: usize = <span class="number">70</span>;
+    <span class="macro">println!</span>(<span class="string">"{:-^1$}"</span>, <span class="string">" hexdump "</span>, PRELAND_WIDTH);
+    <span class="kw">for </span>offset <span class="kw">in </span>(<span class="number">0</span>..data.len()).step_by(<span class="number">16</span>) {
+        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">16 </span>{
+            <span class="kw">if </span>offset + i &lt; data.len() {
+                <span class="macro">print!</span>(<span class="string">"{:02x} "</span>, data[offset + i]);
+            } <span class="kw">else </span>{
+                <span class="macro">print!</span>(<span class="string">"{:02} "</span>, <span class="string">""</span>);
+            }
+        }
+
+        <span class="macro">print!</span>(<span class="string">"{:&gt;6}"</span>, <span class="string">' '</span>);
+
+        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">16 </span>{
+            <span class="kw">if </span>offset + i &lt; data.len() {
+                <span class="kw">let </span>c = data[offset + i];
+                <span class="kw">if </span>c &gt;= <span class="number">0x20 </span>&amp;&amp; c &lt;= <span class="number">0x7e </span>{
+                    <span class="macro">print!</span>(<span class="string">"{}"</span>, c <span class="kw">as </span>char);
+                } <span class="kw">else </span>{
+                    <span class="macro">print!</span>(<span class="string">"."</span>);
+                }
+            } <span class="kw">else </span>{
+                <span class="macro">print!</span>(<span class="string">"{:02} "</span>, <span class="string">""</span>);
+            }
+        }
+
+        <span class="macro">println!</span>(<span class="string">""</span>);
+    }
+    <span class="macro">println!</span>(<span class="string">"{:-^1$}"</span>, <span class="string">" hexdump end "</span>, PRELAND_WIDTH);
+}
 </code></pre></div></section></main></body></html>

@@ -112,6 +112,14 @@
 <a href="#110" id="110">110</a>
 <a href="#111" id="111">111</a>
 <a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! The main module and entrypoint
 //!
 //! Various facilities of the kernels are implemented as submodules. The most
@@ -141,6 +149,8 @@
 </span><span class="kw">extern crate </span>bitflags;
 <span class="kw">use </span>core::arch::global_asm;
 <span class="kw">use </span>buddy_system_allocator::LockedHeap;
+<span class="kw">use </span>log::info;
+<span class="kw">use </span>polyhal::pagetable::PageTableWrapper;
 
 <span class="attr">#[global_allocator]            
 </span><span class="kw">static </span>HEAP_ALLOCATOR: LockedHeap = LockedHeap::empty();
@@ -181,7 +191,7 @@
 <span class="doccomment">/// kernel interrupt
 </span><span class="attr">#[polyhal::arch_interrupt]
 </span><span class="kw">fn </span>kernel_interrupt(ctx: <span class="kw-2">&amp;mut </span>TrapFrame, trap_type: TrapType) {
-    <span class="comment">//println!("trap_type @ {:x?} {:#x?}", trap_type, ctx);
+    <span class="comment">// println!("trap_type @ {:x?} {:#x?}", trap_type, ctx);
     </span><span class="kw">match </span>trap_type {
         UserEnvCall =&gt; {
             <span class="comment">// jump to next instruction anyway
@@ -221,6 +231,12 @@
     init_heap();
     logging::init(<span class="prelude-val">Some</span>(<span class="string">"trace"</span>));
     polyhal::init(<span class="kw-2">&amp;</span>PageAllocImpl);
+    get_mem_areas().into_iter().for_each(|(start, size)| {
+        <span class="macro">info!</span>(<span class="string">"frame alloocator add frame {:#x} - {:#x}"</span>, start, start + size);
+        init_frame_allocator(start, start + size);
+    });
+    <span class="kw">let </span>new_page_table = PageTableWrapper::alloc();
+    new_page_table.change();
     batch::init();
     batch::run_next_app();
 }
