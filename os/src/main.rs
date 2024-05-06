@@ -27,6 +27,8 @@ extern crate alloc;
 extern crate bitflags;
 use core::arch::global_asm;
 use buddy_system_allocator::LockedHeap;
+use log::info;
+use polyhal::pagetable::PageTableWrapper;
 
 #[global_allocator]            
 static HEAP_ALLOCATOR: LockedHeap = LockedHeap::empty();
@@ -67,7 +69,7 @@ impl PageAlloc for PageAllocImpl {
 /// kernel interrupt
 #[polyhal::arch_interrupt]
 fn kernel_interrupt(ctx: &mut TrapFrame, trap_type: TrapType) {
-    //println!("trap_type @ {:x?} {:#x?}", trap_type, ctx);
+    // println!("trap_type @ {:x?} {:#x?}", trap_type, ctx);
     match trap_type {
         UserEnvCall => {
             // jump to next instruction anyway
@@ -107,6 +109,12 @@ fn main(hartid: usize) {
     init_heap();
     logging::init(Some("trace"));
     polyhal::init(&PageAllocImpl);
+    get_mem_areas().into_iter().for_each(|(start, size)| {
+        info!("frame alloocator add frame {:#x} - {:#x}", start, start + size);
+        init_frame_allocator(start, start + size);
+    });
+    let new_page_table = PageTableWrapper::alloc();
+    new_page_table.change();
     batch::init();
     batch::run_next_app();
 }

@@ -1,7 +1,4 @@
-use crate::config::KERNEL_HEAP_SIZE;
-use buddy_system_allocator::LockedHeap;
-
-
+use crate::{config::KERNEL_HEAP_SIZE, HEAP_ALLOCATOR};
 
 #[alloc_error_handler]
 pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {

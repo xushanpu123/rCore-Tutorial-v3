@@ -1,6 +1,39 @@
 # Building
 TARGET := riscv64gc-unknown-none-elf
+ARCH := riscv64
+ifeq ($(ARCH), x86_64)
+  TARGET := x86_64-unknown-none
+  QEMU_EXEC += qemu-system-x86_64 \
+				-machine q35 \
+				-kernel $(KERNEL_ELF) \
+				-cpu IvyBridge-v2
+  BUS := pci
+else ifeq ($(ARCH), riscv64)
+  TARGET := riscv64gc-unknown-none-elf
+  QEMU_EXEC += qemu-system-$(ARCH) \
+				-machine virt \
+				-kernel $(KERNEL_BIN)
+else ifeq ($(ARCH), aarch64)
+  TARGET := aarch64-unknown-none-softfloat
+  QEMU_EXEC += qemu-system-$(ARCH) \
+				-cpu cortex-a72 \
+				-machine virt \
+				-kernel $(KERNEL_BIN)
+else ifeq ($(ARCH), loongarch64)
+  TARGET := loongarch64-unknown-none
+  QEMU_EXEC += qemu-system-$(ARCH) -kernel $(KERNEL_ELF    let mut trap_cx = TrapFrame::new();
+    trap_cx[TrapFrameArgs::SEPC] = APP_BASE_ADDRESS;
+    trap_cx[TrapFrameArgs::SP] = 0x1_8000_0000 + PAGE_SIZE;
+    let ctx_mut = unsafe { (&mut trap_cx as *mut TrapFrame).as_mut().unwrap() };
+    loop {
+        run_user_task(ctx_mut);
+    }
+  BUS := pci
+else
+  $(error "ARCH" must be one of "x86_64", "riscv64", "aarch64" or "loongarch64")
+endif
 MODE := release
+export ARCH TARGET MODE
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 DISASM_TMP := target/$(TARGET)/$(MODE)/asm
@@ -19,8 +52,8 @@ BOOTLOADER := ../bootloader/$(SBI)-$(BOARD).bin
 KERNEL_ENTRY_PA := 0x80200000
 
 # Binutils
-OBJDUMP := rust-objdump --arch-name=riscv64
-OBJCOPY := rust-objcopy --binary-architecture=riscv64
+OBJDUMP := rust-objdump --arch-name=$(ARCH)
+OBJCOPY := rust-objcopy --binary-architecture=$(ARCH)
 
 # Disassembly
 DISASM ?= -x
@@ -28,7 +61,7 @@ DISASM ?= -x
 build: env $(KERNEL_BIN)
 
 env:
-	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
+	(rustup target list | grep "$(TARGET) (installed)") || rustup target add $(TARGET)
 	cargo install cargo-binutils
 	rustup component add rust-src
 	rustup component add llvm-tools-preview
@@ -37,9 +70,9 @@ $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
 
 kernel:
-	@cd ../user && make build
+	@$(MAKE) -C ../user build
 	@echo Platform: $(BOARD)
-	@cargo build $(MODE_ARG)
+	@cargo build -Z build-std=alloc,core --release --target $(TARGET)
 
 
 clean:
@@ -55,15 +88,17 @@ disasm-vim: kernel
 
 run: run-inner
 
-QEMU_ARGS := -machine virt \
-			 -nographic \
-			 -bios $(BOOTLOADER) \
-			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA) \
-			 -D qemu.log -d in_asm,int,pcall,cpu_reset,guest_errors
-
+# QEMU_ARGS := -machine virt \
+# 			 -nographic \
+# 			 -bios $(BOOTLOADER) \
+# 			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA) \
+# 			 -D qemu.log -d in_asm,int,pcall,cpu_reset,guest_errors
+QEMU_EXEC += -nographic \
+				-smp 1 \
+				-D qemu.log -d in_asm,int,pcall,cpu_reset,guest_errors
 
 run-inner: build
-	@qemu-system-riscv64 $(QEMU_ARGS)
+	$(QEMU_EXEC)
 
 debug: build
 	@tmux new-session -d \
