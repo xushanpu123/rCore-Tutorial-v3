@@ -14,27 +14,24 @@
 //!
 //! Be careful when you see `__switch` ASM function in `switch.S`. Control flow around this function
 //! might not be what you expect.
-mod context;
 mod manager;
 mod pid;
 mod processor;
-mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
 use crate::loader::get_app_data_by_name;
-use crate::sbi::shutdown;
+use polyhal::shutdown;
 use alloc::sync::Arc;
 use lazy_static::*;
 pub use manager::{fetch_task, TaskManager};
-use switch::__switch;
+use polyhal::KContext;
 use task::{TaskControlBlock, TaskStatus};
 
-pub use context::TaskContext;
 pub use manager::add_task;
-pub use pid::{pid_alloc, KernelStack, PidAllocator, PidHandle};
+pub use pid::{pid_alloc, PidHandle};
 pub use processor::{
-    current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
+    current_task, current_user_token, run_tasks, schedule, take_current_task,
     Processor,
 };
 /// Suspend the current 'Running' task and run the next task in task list.
@@ -44,7 +41,7 @@ pub fn suspend_current_and_run_next() {
 
     // ---- access current TCB exclusively
     let mut task_inner = task.inner_exclusive_access();
-    let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
+    let task_cx_ptr = &mut task_inner.task_cx as *mut KContext;
     // Change status to Ready
     task_inner.task_status = TaskStatus::Ready;
     drop(task_inner);
@@ -72,10 +69,10 @@ pub fn exit_current_and_run_next(exit_code: i32) {
         );
         if exit_code != 0 {
             //crate::sbi::shutdown(255); //255 == -1 for err hint
-            shutdown(true)
+            shutdown()
         } else {
             //crate::sbi::shutdown(0); //0 for success hint
-            shutdown(false)
+            shutdown()
         }
     }
 
@@ -105,7 +102,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     // drop task manually to maintain rc correctly
     drop(task);
     // we do not have to save task context
-    let mut _unused = TaskContext::zero_init();
+    let mut _unused = KContext::blank();
     schedule(&mut _unused as *mut _);
 }
 

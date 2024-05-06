@@ -1,27 +1,48 @@
 //!Implementation of [`TaskControlBlock`]
-use super::TaskContext;
-use super::{pid_alloc, KernelStack, PidHandle};
-use crate::config::TRAP_CONTEXT;
-use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
+use super::{pid_alloc, PidHandle, current_task};
 use crate::sync::UPSafeCell;
-use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
+use polyhal::pagetable::PageTable;
 use core::cell::RefMut;
+use crate::config::KERNEL_STACK_SIZE;
+use crate::mm::MemorySet;
+use core::mem::size_of;
+use polyhal::{
+    read_current_tp, run_user_task, KContext, KContextArgs, TrapFrame, TrapFrameArgs,
+};
+use log::*;
 
 pub struct TaskControlBlock {
     // immutable
     pub pid: PidHandle,
-    pub kernel_stack: KernelStack,
     // mutable
     inner: UPSafeCell<TaskControlBlockInner>,
 }
 
+pub struct KernelStack {
+    inner: Arc<[u128; KERNEL_STACK_SIZE / size_of::<u128>()]>,
+}
+
+impl KernelStack {
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new([0u128; KERNEL_STACK_SIZE / size_of::<u128>()]),
+        }
+    }
+
+    pub fn get_position(&self) -> (usize, usize) {
+        let bottom = self.inner.as_ptr() as usize;
+        (bottom, bottom + KERNEL_STACK_SIZE)
+    }
+}
+
 pub struct TaskControlBlockInner {
-    pub trap_cx_ppn: PhysPageNum,
+    pub trap_cx: TrapFrame,
     pub base_size: usize,
-    pub task_cx: TaskContext,
+    pub task_cx: KContext,
     pub task_status: TaskStatus,
+    pub kernel_stack: KernelStack,
     pub memory_set: MemorySet,
     pub parent: Option<Weak<TaskControlBlock>>,
     pub children: Vec<Arc<TaskControlBlock>>,
@@ -34,10 +55,13 @@ impl TaskControlBlockInner {
         &self.task_cx_ptr as *const usize
     }
     */
-    pub fn get_trap_cx(&self) -> &'static mut TrapContext {
-        self.trap_cx_ppn.get_mut()
+    pub fn get_trap_cx(&self) -> &'static mut TrapFrame {
+        let paddr = &self.trap_cx as *const TrapFrame as usize as *mut TrapFrame;
+        // let paddr: PhysAddr = self.trap_cx.into();
+        // unsafe { paddr.get_mut_ptr::<TrapFrame>().as_mut().unwrap() }
+        unsafe { paddr.as_mut().unwrap() }
     }
-    pub fn get_user_token(&self) -> usize {
+    pub fn get_user_token(&self) -> PageTable {
         self.memory_set.token()
     }
     fn get_status(&self) -> TaskStatus {
@@ -48,6 +72,28 @@ impl TaskControlBlockInner {
     }
 }
 
+fn task_entry() {
+    trace!("os::task::task_entry");
+    let task = current_task()
+        .unwrap()
+        .inner
+        .exclusive_access()
+        .get_trap_cx() as *mut TrapFrame;
+    // run_user_task_forever(unsafe { task.as_mut().unwrap() })
+    let ctx_mut = unsafe { task.as_mut().unwrap() };
+    loop {
+        run_user_task(ctx_mut);
+    }
+}
+
+fn blank_kcontext(ksp: usize) -> KContext {
+    let mut kcx = KContext::blank();
+    kcx[KContextArgs::KPC] = task_entry as usize;
+    kcx[KContextArgs::KSP] = ksp;
+    kcx[KContextArgs::KTP] = read_current_tp();
+    kcx
+}
+
 impl TaskControlBlock {
     pub fn inner_exclusive_access(&self) -> RefMut<'_, TaskControlBlockInner> {
         self.inner.exclusive_access()
@@ -55,91 +101,66 @@ impl TaskControlBlock {
     pub fn new(elf_data: &[u8]) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
-        let trap_cx_ppn = memory_set
-            .translate(VirtAddr::from(TRAP_CONTEXT).into())
-            .unwrap()
-            .ppn();
         // alloc a pid and a kernel stack in kernel space
         let pid_handle = pid_alloc();
-        let kernel_stack = KernelStack::new(&pid_handle);
-        let kernel_stack_top = kernel_stack.get_top();
+        let kstack = KernelStack::new();
         // push a task context which goes to trap_return to the top of kernel stack
         let task_control_block = Self {
             pid: pid_handle,
-            kernel_stack,
             inner: unsafe {
                 UPSafeCell::new(TaskControlBlockInner {
-                    trap_cx_ppn,
+                    trap_cx: TrapFrame::new(),
                     base_size: user_sp,
-                    task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+                    task_cx: blank_kcontext(kstack.get_position().1),
                     task_status: TaskStatus::Ready,
                     memory_set,
                     parent: None,
                     children: Vec::new(),
+                    kernel_stack: kstack,
                     exit_code: 0,
                 })
             },
         };
         // prepare TrapContext in user space
         let trap_cx = task_control_block.inner_exclusive_access().get_trap_cx();
-        *trap_cx = TrapContext::app_init_context(
-            entry_point,
-            user_sp,
-            KERNEL_SPACE.exclusive_access().token(),
-            kernel_stack_top,
-            trap_handler as usize,
-        );
+        trap_cx[TrapFrameArgs::SEPC] = entry_point;
+        trap_cx[TrapFrameArgs::SP] = user_sp;
         task_control_block
     }
     pub fn exec(&self, elf_data: &[u8]) {
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
-        let trap_cx_ppn = memory_set
-            .translate(VirtAddr::from(TRAP_CONTEXT).into())
-            .unwrap()
-            .ppn();
-
+        memory_set.activate();
+        
         // **** access inner exclusively
         let mut inner = self.inner_exclusive_access();
         // substitute memory_set
         inner.memory_set = memory_set;
         // update trap_cx ppn
-        inner.trap_cx_ppn = trap_cx_ppn;
+        inner.trap_cx = TrapFrame::new();
         // initialize base_size
-        inner.base_size = user_sp;
-        // initialize trap_cx
-        let trap_cx = inner.get_trap_cx();
-        *trap_cx = TrapContext::app_init_context(
-            entry_point,
-            user_sp,
-            KERNEL_SPACE.exclusive_access().token(),
-            self.kernel_stack.get_top(),
-            trap_handler as usize,
-        );
-        // **** release inner automatically
+        let mut trap_cx = TrapFrame::new();
+        trap_cx[TrapFrameArgs::SEPC] = entry_point;
+        trap_cx[TrapFrameArgs::SP] = user_sp;
+        *inner.get_trap_cx() = trap_cx;
     }
     pub fn fork(self: &Arc<Self>) -> Arc<Self> {
         // ---- access parent PCB exclusively
         let mut parent_inner = self.inner_exclusive_access();
         // copy user space(include trap context)
         let memory_set = MemorySet::from_existed_user(&parent_inner.memory_set);
-        let trap_cx_ppn = memory_set
-            .translate(VirtAddr::from(TRAP_CONTEXT).into())
-            .unwrap()
-            .ppn();
         // alloc a pid and a kernel stack in kernel space
         let pid_handle = pid_alloc();
-        let kernel_stack = KernelStack::new(&pid_handle);
-        let kernel_stack_top = kernel_stack.get_top();
+        let kstack = KernelStack::new();
         let task_control_block = Arc::new(TaskControlBlock {
             pid: pid_handle,
-            kernel_stack,
             inner: unsafe {
                 UPSafeCell::new(TaskControlBlockInner {
-                    trap_cx_ppn,
+                    trap_cx: parent_inner.trap_cx.clone(),
                     base_size: parent_inner.base_size,
-                    task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+                    task_cx: blank_kcontext(kstack.get_position().1),
                     task_status: TaskStatus::Ready,
+                    kernel_stack: kstack,
                     memory_set,
                     parent: Some(Arc::downgrade(self)),
                     children: Vec::new(),
@@ -149,14 +170,7 @@ impl TaskControlBlock {
         });
         // add child
         parent_inner.children.push(task_control_block.clone());
-        // modify kernel_sp in trap_cx
-        // **** access children PCB exclusively
-        let trap_cx = task_control_block.inner_exclusive_access().get_trap_cx();
-        trap_cx.kernel_sp = kernel_stack_top;
-        // return
         task_control_block
-        // ---- release parent PCB automatically
-        // **** release children PCB automatically
     }
     pub fn getpid(&self) -> usize {
         self.pid.0
