@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["clear_bss","rust_main"],"macro":["print","println"],"mod":["board","config","console","lang_items","loader","sbi","sync","syscall","task","timer","trap"]};
+window.SIDEBAR_ITEMS = {"fn":["kernel_interrupt","main"],"macro":["print","println"],"mod":["board","config","console","frame_allocater","heap_allocator","lang_items","loader","logging","sync","syscall","task"],"static":["HEAP_ALLOCATOR"],"struct":["PageAllocImpl"]};

@@ -67,13 +67,71 @@
 <a href="#65" id="65">65</a>
 <a href="#66" id="66">66</a>
 <a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! The main module and entrypoint
 //!
 //! Various facilities of the kernels are implemented as submodules. The most
 //! important ones are:
 //!
 //! - [`trap`]: Handles all cases of switching from userspace to the kernel
-//! - [`task`]: Task management
 //! - [`syscall`]: System call handling and implementation
 //!
 //! The operating system also starts in this module. Kernel code starts
@@ -81,57 +139,116 @@
 //! initialize various pieces of functionality. (See its source code for
 //! details.)
 //!
-//! We then call [`task::run_first_task()`] and for the first time go to
+//! We then call [`batch::run_next_app()`] and for the first time go to
 //! userspace.
 
-</span><span class="attr">#![deny(missing_docs)]
-#![deny(warnings)]
-#![no_std]
+</span><span class="comment">//#![deny(missing_docs)]
+//#![deny(warnings)]
+</span><span class="attr">#![no_std]
 #![no_main]
 #![feature(panic_info_message)]
+#![feature(alloc_error_handler)]
 
-</span><span class="kw">use </span>core::arch::global_asm;
+</span><span class="kw">extern crate </span>polyhal;
+<span class="kw">extern crate </span>alloc;
+<span class="attr">#[macro_use]
+</span><span class="kw">extern crate </span>bitflags;
+<span class="kw">use </span>core::arch::global_asm;
+<span class="kw">use </span>buddy_system_allocator::LockedHeap;
+<span class="kw">use </span>log::info;
+<span class="kw">use </span>polyhal::pagetable::PageTableWrapper;
 
+<span class="attr">#[global_allocator]            
+</span><span class="kw">static </span>HEAP_ALLOCATOR: LockedHeap = LockedHeap::empty();
+<span class="comment">//use log::*;
+</span><span class="attr">#[macro_use]
+</span><span class="kw">mod </span>console;
 <span class="attr">#[path = <span class="string">"boards/qemu.rs"</span>]
 </span><span class="kw">mod </span>board;
-
-<span class="attr">#[macro_use]
-</span><span class="kw">mod </span>console;
-<span class="kw">mod </span>config;
-<span class="kw">mod </span>lang_items;
+<span class="kw">pub mod </span>frame_allocater;
+<span class="kw">pub mod </span>heap_allocator;
 <span class="kw">mod </span>loader;
-<span class="kw">mod </span>sbi;
+<span class="kw">mod </span>lang_items;
+<span class="kw">mod </span>logging;
 <span class="kw">mod </span>sync;
-<span class="kw">pub mod </span>syscall;
 <span class="kw">pub mod </span>task;
-<span class="kw">mod </span>timer;
-<span class="kw">pub mod </span>trap;
-
-<span class="macro">global_asm!</span>(<span class="macro">include_str!</span>(<span class="string">"entry.asm"</span>));
+<span class="kw">pub mod </span>syscall;
+<span class="kw">pub mod </span>config;
+<span class="kw">use </span><span class="kw">crate</span>::syscall::syscall;
+<span class="kw">pub use </span><span class="kw">crate</span>::frame_allocater::<span class="kw-2">*</span>;
+<span class="kw">use </span>polyhal::{get_mem_areas, PageAlloc, TrapFrame, TrapFrameArgs, TrapType};
+<span class="kw">use </span>task::{suspend_current_and_run_next,exit_current_and_run_next};
+<span class="kw">use </span>polyhal::addr::PhysPage;
+<span class="kw">use </span>polyhal::TrapType::<span class="kw-2">*</span>;
+<span class="kw">pub use </span>heap_allocator::init_heap;
 <span class="macro">global_asm!</span>(<span class="macro">include_str!</span>(<span class="string">"link_app.S"</span>));
 
-<span class="doccomment">/// clear BSS segment
-</span><span class="kw">fn </span>clear_bss() {
-    <span class="kw">extern </span><span class="string">"C" </span>{
-        <span class="kw">fn </span>sbss();
-        <span class="kw">fn </span>ebss();
+<span class="kw">pub struct </span>PageAllocImpl;
+
+<span class="kw">impl </span>PageAlloc <span class="kw">for </span>PageAllocImpl {
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>alloc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PhysPage {
+        frame_alloc_persist().expect(<span class="string">"can't find memory page"</span>)
     }
-    <span class="kw">unsafe </span>{
-        core::slice::from_raw_parts_mut(sbss <span class="kw">as </span>usize <span class="kw">as </span><span class="kw-2">*mut </span>u8, ebss <span class="kw">as </span>usize - sbss <span class="kw">as </span>usize)
-            .fill(<span class="number">0</span>);
+
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>dealloc(<span class="kw-2">&amp;</span><span class="self">self</span>, ppn: PhysPage) {
+        frame_dealloc(ppn)
+    }
+}
+
+<span class="doccomment">/// kernel interrupt
+</span><span class="attr">#[polyhal::arch_interrupt]
+</span><span class="kw">fn </span>kernel_interrupt(ctx: <span class="kw-2">&amp;mut </span>TrapFrame, trap_type: TrapType) {
+    <span class="comment">// println!("trap_type @ {:x?} {:#x?}", trap_type, ctx);
+    </span><span class="kw">match </span>trap_type {
+        UserEnvCall =&gt; {
+            <span class="comment">// jump to next instruction anyway
+            </span>ctx.syscall_ok();
+            <span class="kw">let </span>args = ctx.args();
+            <span class="comment">// get system call return value
+            // info!("syscall: {}", ctx[TrapFrameArgs::SYSCALL]);
+
+            </span><span class="kw">let </span>result = syscall(ctx[TrapFrameArgs::SYSCALL], [args[<span class="number">0</span>], args[<span class="number">1</span>], args[<span class="number">2</span>]]);
+            <span class="comment">// cx is changed during sys_exec, so we have to call it again
+            </span>ctx[TrapFrameArgs::RET] = result <span class="kw">as </span>usize;
+        }
+        StorePageFault(_paddr) | LoadPageFault(_paddr) | InstructionPageFault(_paddr) =&gt; {
+            <span class="macro">println!</span>(<span class="string">"[kernel] PageFault in application, kernel killed it. paddr={:x}"</span>,_paddr);
+            exit_current_and_run_next();
+        }
+        IllegalInstruction(<span class="kw">_</span>) =&gt; {
+            <span class="macro">println!</span>(<span class="string">"[kernel] IllegalInstruction in application, kernel killed it."</span>);
+            exit_current_and_run_next();
+        }
+        Time =&gt; {
+            suspend_current_and_run_next()
+        }
+        <span class="kw">_ </span>=&gt; {
+            <span class="macro">panic!</span>(<span class="string">"unsuspended trap type: {:?}"</span>, trap_type);
+        }
     }
 }
 
 <span class="doccomment">/// the rust entry-point of os
-</span><span class="attr">#[no_mangle]
-</span><span class="kw">pub fn </span>rust_main() -&gt; ! {
-    clear_bss();
+</span><span class="attr">#[polyhal::arch_entry]
+</span><span class="kw">fn </span>main(hartid: usize) {
+    <span class="kw">if </span>hartid != <span class="number">0 </span>{
+        <span class="kw">return</span>;
+    }
     <span class="macro">println!</span>(<span class="string">"[kernel] Hello, world!"</span>);
-    trap::init();
+    init_heap();
+    logging::init(<span class="prelude-val">Some</span>(<span class="string">"trace"</span>));
+    polyhal::init(<span class="kw-2">&amp;</span>PageAllocImpl);
+    get_mem_areas().into_iter().for_each(|(start, size)| {
+        <span class="macro">info!</span>(<span class="string">"frame alloocator add frame {:#x} - {:#x}"</span>, start, start + size);
+        init_frame_allocator(start, start + size);
+    });
+    <span class="kw">let </span>new_page_table = PageTableWrapper::alloc();
+    new_page_table.change();
     loader::load_apps();
-    trap::enable_timer_interrupt();
-    timer::set_next_trigger();
-    task::run_first_task();
+    <span class="macro">println!</span>(<span class="string">"456"</span>);
+    <span class="comment">//timer::set_next_trigger();
+    </span>task::run_first_task();
     <span class="macro">panic!</span>(<span class="string">"Unreachable in rust_main!"</span>);
-}
-</code></pre></div></section></main></body></html>
+}</code></pre></div></section></main></body></html>

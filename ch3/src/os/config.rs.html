@@ -16,14 +16,16 @@
 <a href="#14" id="14">14</a>
 <a href="#15" id="15">15</a>
 <a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Constants used in rCore
 
 </span><span class="kw">pub const </span>USER_STACK_SIZE: usize = <span class="number">4096</span>;
 <span class="kw">pub const </span>KERNEL_STACK_SIZE: usize = <span class="number">4096 </span>* <span class="number">2</span>;
+<span class="kw">pub const </span>KERNEL_HEAP_SIZE: usize = <span class="number">0x200_0000</span>;
 <span class="kw">pub const </span>MAX_APP_NUM: usize = <span class="number">4</span>;
 <span class="kw">pub const </span>APP_BASE_ADDRESS: usize = <span class="number">0x80400000</span>;
 <span class="kw">pub const </span>APP_SIZE_LIMIT: usize = <span class="number">0x20000</span>;
-
+<span class="kw">pub const </span>PAGE_SIZE: usize = <span class="number">0x1000</span>;
 <span class="comment">/*
 #[cfg(feature = "board_k210")]
 pub const CLOCK_FREQ: usize = 403000000 / 62;

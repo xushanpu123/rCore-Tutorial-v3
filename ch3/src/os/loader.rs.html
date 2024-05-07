@@ -103,17 +103,19 @@
 <a href="#101" id="101">101</a>
 <a href="#102" id="102">102</a>
 <a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Loading user applications into memory
 //!
 //! For chapter 3, user applications are simply part of the data included in the
 //! kernel binary, so we only need to copy them to the space allocated for each
 //! app to load them. We also allocate fixed spaces for each task's
 //! [`KernelStack`] and [`UserStack`].
-
 </span><span class="kw">use </span><span class="kw">crate</span>::config::<span class="kw-2">*</span>;
-<span class="kw">use </span><span class="kw">crate</span>::trap::TrapContext;
 <span class="kw">use </span>core::arch::asm;
-
+<span class="kw">use </span>log::info;
+<span class="kw">use </span>polyhal::pagetable::{MappingFlags, MappingSize, PageTable, PageTableWrapper};
+<span class="kw">pub use </span><span class="kw">crate</span>::frame_allocater::{frame_alloc, frame_alloc_persist, frame_dealloc, FrameTracker};
+<span class="kw">use </span>polyhal::addr::<span class="kw-2">*</span>;
 <span class="attr">#[repr(align(<span class="number">4096</span>))]
 #[derive(Copy, Clone)]
 </span><span class="kw">struct </span>KernelStack {
@@ -138,13 +140,6 @@
     <span class="kw">fn </span>get_sp(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.data.as_ptr() <span class="kw">as </span>usize + KERNEL_STACK_SIZE
     }
-    <span class="kw">pub fn </span>push_context(<span class="kw-2">&amp;</span><span class="self">self</span>, trap_cx: TrapContext) -&gt; usize {
-        <span class="kw">let </span>trap_cx_ptr = (<span class="self">self</span>.get_sp() - core::mem::size_of::&lt;TrapContext&gt;()) <span class="kw">as </span><span class="kw-2">*mut </span>TrapContext;
-        <span class="kw">unsafe </span>{
-            <span class="kw-2">*</span>trap_cx_ptr = trap_cx;
-        }
-        trap_cx_ptr <span class="kw">as </span>usize
-    }
 }
 
 <span class="kw">impl </span>UserStack {
@@ -154,8 +149,13 @@
 }
 
 <span class="doccomment">/// Get base address of app i.
-</span><span class="kw">fn </span>get_base_i(app_id: usize) -&gt; usize {
+</span><span class="kw">pub fn </span>get_base_i(app_id: usize) -&gt; usize {
     APP_BASE_ADDRESS + app_id * APP_SIZE_LIMIT
+}
+
+<span class="kw">pub fn </span>get_ksp(i:usize)-&gt;usize{
+    KERNEL_STACK[i].get_sp()
+
 }
 
 <span class="doccomment">/// Get the total number of applications.
@@ -174,36 +174,38 @@
     }
     <span class="kw">let </span>num_app_ptr = _num_app <span class="kw">as </span>usize <span class="kw">as </span><span class="kw-2">*const </span>usize;
     <span class="kw">let </span>num_app = get_num_app();
+    <span class="macro">info!</span>(<span class="string">"num_app={}"</span>,num_app);
     <span class="kw">let </span>app_start = <span class="kw">unsafe </span>{ core::slice::from_raw_parts(num_app_ptr.add(<span class="number">1</span>), num_app + <span class="number">1</span>) };
     <span class="comment">// load apps
     </span><span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..num_app {
         <span class="kw">let </span>base_i = get_base_i(i);
         <span class="comment">// clear region
-        </span>(base_i..base_i + APP_SIZE_LIMIT)
+        </span><span class="kw">let </span>page_table = PageTable::current();
+        <span class="kw">let </span>Page_Num = APP_SIZE_LIMIT/PAGE_SIZE;
+        <span class="macro">info!</span>(<span class="string">"{:#x}"</span>,base_i);
+        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..Page_Num {
+            page_table.map_page(VirtPage::from_addr(base_i + PAGE_SIZE * i), frame_alloc_persist().expect(<span class="string">"can't allocate frame"</span>), MappingFlags::URWX, MappingSize::Page4KB);
+        }
+        page_table.map_page(VirtPage::from_addr(<span class="number">0x1_8000_0000 </span>+ i<span class="kw-2">*</span>PAGE_SIZE), frame_alloc_persist().expect(<span class="string">"can't allocate frame"</span>), MappingFlags::URWX, MappingSize::Page4KB);
+        (base_i..base_i + APP_SIZE_LIMIT)
             .for_each(|addr| <span class="kw">unsafe </span>{ (addr <span class="kw">as </span><span class="kw-2">*mut </span>u8).write_volatile(<span class="number">0</span>) });
+        <span class="macro">info!</span>(<span class="string">"start!"</span>);
         <span class="comment">// load app from data section to memory
-        </span><span class="kw">let </span>src = <span class="kw">unsafe </span>{
+
+        </span><span class="macro">println!</span>(<span class="string">"[kernel] Loading app_{}"</span>, i);
+        <span class="macro">info!</span>(<span class="string">"app src: {:#x} size: {:#x}"</span>, app_start[i], app_start[i + <span class="number">1</span>] - app_start[i]);
+        <span class="kw">let </span>src = <span class="kw">unsafe </span>{
             core::slice::from_raw_parts(app_start[i] <span class="kw">as </span><span class="kw-2">*const </span>u8, app_start[i + <span class="number">1</span>] - app_start[i])
         };
         <span class="kw">let </span>dst = <span class="kw">unsafe </span>{ core::slice::from_raw_parts_mut(base_i <span class="kw">as </span><span class="kw-2">*mut </span>u8, src.len()) };
         dst.copy_from_slice(src);
     }
-    <span class="comment">// Memory fence about fetching the instruction memory
-    // It is guaranteed that a subsequent instruction fetch must
-    // observes all previous writes to the instruction memory.
-    // Therefore, fence.i must be executed after we have loaded
-    // the code of the next app into the instruction memory.
+    
+    <span class="comment">// the code of the next app into the instruction memory.
     // See also: riscv non-priv spec chapter 3, 'Zifencei' extension.
     </span><span class="kw">unsafe </span>{
         <span class="macro">asm!</span>(<span class="string">"fence.i"</span>);
     }
 }
 
-<span class="doccomment">/// get app info with entry and sp and save `TrapContext` in kernel stack
-</span><span class="kw">pub fn </span>init_app_cx(app_id: usize) -&gt; usize {
-    KERNEL_STACK[app_id].push_context(TrapContext::app_init_context(
-        get_base_i(app_id),
-        USER_STACK[app_id].get_sp(),
-    ))
-}
 </code></pre></div></section></main></body></html>

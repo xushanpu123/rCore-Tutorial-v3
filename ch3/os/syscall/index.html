@@ -4,7 +4,7 @@
 whenever userspace wishes to perform a system call using the <code>ecall</code>
 instruction. In this case, the processor raises an ‘Environment call from
 U-mode’ exception, which is handled as one of the cases in
-<a href="../trap/fn.trap_handler.html" title="fn os::trap::trap_handler"><code>crate::trap::trap_handler</code></a>.</p>
+[<code>crate::trap::trap_handler</code>].</p>
 <p>For clarity, each single syscall is implemented as its own function, named
 <code>sys_</code> then the name of the syscall. You can find functions like this in
 submodules, and you should also implement syscalls this way.</p>

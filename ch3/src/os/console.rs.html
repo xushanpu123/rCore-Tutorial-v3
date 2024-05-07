@@ -34,18 +34,16 @@
 <a href="#32" id="32">32</a>
 <a href="#33" id="33">33</a>
 <a href="#34" id="34">34</a>
-<a href="#35" id="35">35</a>
-</pre></div><pre class="rust"><code><span class="doccomment">//! SBI console driver, for text output
+</pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt::{<span class="self">self</span>, Write};
 
-</span><span class="kw">use </span><span class="kw">crate</span>::sbi::console_putchar;
-<span class="kw">use </span>core::fmt::{<span class="self">self</span>, Write};
+<span class="kw">use </span>polyhal::debug::DebugConsole;
 
 <span class="kw">struct </span>Stdout;
 
 <span class="kw">impl </span>Write <span class="kw">for </span>Stdout {
     <span class="kw">fn </span>write_str(<span class="kw-2">&amp;mut </span><span class="self">self</span>, s: <span class="kw-2">&amp;</span>str) -&gt; fmt::Result {
-        <span class="kw">for </span>c <span class="kw">in </span>s.chars() {
-            console_putchar(c <span class="kw">as </span>usize);
+        <span class="kw">for </span>c <span class="kw">in </span>s.bytes() {
+            DebugConsole::putchar(c);
         }
         <span class="prelude-val">Ok</span>(())
     }
