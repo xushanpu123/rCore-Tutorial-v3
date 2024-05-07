@@ -23,7 +23,7 @@
 <a href="#21" id="21">21</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Process management syscalls
 </span><span class="kw">use </span><span class="kw">crate</span>::task::{exit_current_and_run_next, suspend_current_and_run_next};
-
+<span class="kw">use </span><span class="kw">crate</span>::timer::get_time_ms;
 
 <span class="doccomment">/// task exits and submit an exit code
 </span><span class="kw">pub fn </span>sys_exit(exit_code: i32) -&gt; ! {
@@ -40,6 +40,6 @@
 
 <span class="doccomment">/// get time in milliseconds
 </span><span class="kw">pub fn </span>sys_get_time() -&gt; isize {
-    <span class="number">0
-</span>}
+    get_time_ms() <span class="kw">as </span>isize
+}
 </code></pre></div></section></main></body></html>
