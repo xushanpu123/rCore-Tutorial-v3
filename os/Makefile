@@ -21,13 +21,7 @@ else ifeq ($(ARCH), aarch64)
 				-kernel $(KERNEL_BIN)
 else ifeq ($(ARCH), loongarch64)
   TARGET := loongarch64-unknown-none
-  QEMU_EXEC += qemu-system-$(ARCH) -kernel $(KERNEL_ELF    let mut trap_cx = TrapFrame::new();
-    trap_cx[TrapFrameArgs::SEPC] = APP_BASE_ADDRESS;
-    trap_cx[TrapFrameArgs::SP] = 0x1_8000_0000 + PAGE_SIZE;
-    let ctx_mut = unsafe { (&mut trap_cx as *mut TrapFrame).as_mut().unwrap() };
-    loop {
-        run_user_task(ctx_mut);
-    }
+  QEMU_EXEC += qemu-system-$(ARCH) -kernel $(KERNEL_ELF)
   BUS := pci
 else
   $(error "ARCH" must be one of "x86_64", "riscv64", "aarch64" or "loongarch64")
