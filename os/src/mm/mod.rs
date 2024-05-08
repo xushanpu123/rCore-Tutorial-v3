@@ -15,4 +15,4 @@ pub use frame_allocator::{frame_alloc, FrameTracker};
 pub use memory_set::{MapPermission, MemorySet};
 pub use page_table::{translated_byte_buffer, translated_refmut, translated_str, translated_ref};
 pub use heap_allocator::init_heap;
-pub use frame_allocator::{frame_alloc_persist, frame_dealloc, init_frame_allocator};
+pub use frame_allocator::{frame_alloc_page_with_clear, frame_dealloc, init_frame_allocator};

@@ -114,7 +114,7 @@ pub struct PageAllocImpl;
 impl PageAlloc for PageAllocImpl {
     #[inline]
     fn alloc(&self) -> PhysPage {
-        mm::frame_alloc_persist().expect("can't find memory page")
+        mm::frame_alloc_page_with_clear().expect("failed to alloc page")
     }
 
     #[inline]

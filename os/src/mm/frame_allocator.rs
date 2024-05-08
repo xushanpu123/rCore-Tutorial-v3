@@ -121,7 +121,7 @@ pub fn frame_alloc() -> Option<FrameTracker> {
 }
 
 /// doc
-pub fn frame_alloc_persist() -> Option<PhysPage> {
+pub fn frame_alloc_page_with_clear() -> Option<PhysPage> {
     FRAME_ALLOCATOR
         .exclusive_access()
         .alloc()
