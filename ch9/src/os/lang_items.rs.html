@@ -38,7 +38,7 @@
 <a href="#36" id="36">36</a>
 <a href="#37" id="37">37</a>
 <a href="#38" id="38">38</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::sbi::shutdown;
+</pre></div><pre class="rust"><code><span class="kw">use </span>polyhal::shutdown;
 <span class="kw">use </span><span class="kw">crate</span>::task::current_kstack_top;
 <span class="kw">use </span>core::arch::asm;
 <span class="kw">use </span>core::panic::PanicInfo;
@@ -59,7 +59,7 @@
     <span class="kw">unsafe </span>{
         backtrace();
     }
-    shutdown(<span class="bool-val">true</span>)
+    shutdown()
 }
 
 <span class="kw">unsafe fn </span>backtrace() {

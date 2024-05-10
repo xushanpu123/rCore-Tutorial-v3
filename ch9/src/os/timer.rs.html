@@ -69,15 +69,9 @@
 <a href="#67" id="67">67</a>
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
-<a href="#70" id="70">70</a>
-<a href="#71" id="71">71</a>
-<a href="#72" id="72">72</a>
-<a href="#73" id="73">73</a>
-<a href="#74" id="74">74</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::cmp::Ordering;
 
 <span class="kw">use </span><span class="kw">crate</span>::config::CLOCK_FREQ;
-<span class="kw">use </span><span class="kw">crate</span>::sbi::set_timer;
 <span class="kw">use </span><span class="kw">crate</span>::sync::UPIntrFreeCell;
 <span class="kw">use </span><span class="kw">crate</span>::task::{wakeup_task, TaskControlBlock};
 <span class="kw">use </span>alloc::collections::BinaryHeap;
@@ -94,10 +88,6 @@
 
 <span class="kw">pub fn </span>get_time_ms() -&gt; usize {
     time::read() / (CLOCK_FREQ / MSEC_PER_SEC)
-}
-
-<span class="kw">pub fn </span>set_next_trigger() {
-    set_timer(get_time() + CLOCK_FREQ / TICKS_PER_SEC);
 }
 
 <span class="kw">pub struct </span>TimerCondVar {

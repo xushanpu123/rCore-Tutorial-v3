@@ -109,11 +109,14 @@
 <a href="#107" id="107">107</a>
 <a href="#108" id="108">108</a>
 <a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
 </pre></div><pre class="rust"><code><span class="kw">use super</span>::{fetch_task, TaskStatus};
 <span class="kw">use super</span>::{ProcessControlBlock, TaskControlBlock};
 <span class="kw">use </span><span class="kw">crate</span>::sync::UPIntrFreeCell;
 <span class="kw">use </span>alloc::sync::Arc;
 <span class="kw">use </span>lazy_static::<span class="kw-2">*</span>;
+<span class="kw">use </span>log::debug;
 <span class="kw">use </span>polyhal::{context_switch_pt, kernel_page_table, KContext, TrapFrame};
 
 <span class="kw">pub struct </span>Processor {
@@ -164,6 +167,7 @@
             // }
             // info!("switch to task: {:#x?}", unsafe { next_task_cx_ptr.as_ref().unwrap() });
             </span><span class="kw">unsafe </span>{
+                <span class="macro">debug!</span>(<span class="string">"context switch to task: {:#x?}"</span>, next_task_cx_ptr);
                 context_switch_pt(idle_task_cx_ptr, next_task_cx_ptr, page_table);
             }
         } <span class="kw">else </span>{

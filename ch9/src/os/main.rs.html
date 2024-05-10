@@ -149,12 +149,6 @@
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
 </pre></div><pre class="rust"><code><span class="attr">#![no_std]
 #![no_main]
 #![feature(panic_info_message)]
@@ -177,7 +171,6 @@
 <span class="kw">mod </span>lang_items;
 <span class="kw">mod </span>mm;
 <span class="kw">mod </span>net;
-<span class="kw">mod </span>sbi;
 <span class="kw">mod </span>sync;
 <span class="kw">mod </span>syscall;
 <span class="kw">mod </span>task;
@@ -207,7 +200,7 @@
 
 <span class="attr">#[polyhal::arch_interrupt]
 </span><span class="kw">fn </span>kernel_interrupt(ctx: <span class="kw-2">&amp;mut </span>TrapFrame, trap_type: TrapType) {
-    <span class="macro">log::trace!</span>(<span class="string">"trap_type @ {:x?} {:#x?}"</span>, trap_type, ctx);
+    <span class="macro">log::info!</span>(<span class="string">"trap_type @ {:x?}"</span>, trap_type);
     <span class="comment">// info!("current_task id: {}", current_task().is_some());
     </span><span class="kw">match </span>trap_type {
         Breakpoint =&gt; <span class="kw">return</span>,
@@ -216,7 +209,6 @@
             </span>ctx.syscall_ok();
             <span class="kw">let </span>args = ctx.args();
             <span class="comment">// get system call return value
-            // info!("syscall: {}", ctx[TrapFrameArgs::SYSCALL]);
 
             </span><span class="kw">let </span>result = syscall(ctx[TrapFrameArgs::SYSCALL], [args[<span class="number">0</span>], args[<span class="number">1</span>], args[<span class="number">2</span>]]);
             <span class="comment">// cx is changed during sys_exec, so we have to call it again
@@ -262,6 +254,7 @@
         <span class="comment">// panic!("end");
         </span>exit_current_and_run_next(errno);
     }
+    <span class="macro">info!</span>(<span class="string">"end of trap"</span>);
 }
 
 <span class="attr">#[polyhal::arch_entry]
@@ -272,13 +265,7 @@
     get_mem_areas().into_iter().for_each(|(start, size)|{
         mm::init_frame_allocator(start, start+size);
     });
-    <span class="comment">// debug!("cpu num: {}", get_cpu_num());
-    // let fdt = get_fdt().unwrap();
-    // fdt.all_nodes().into_iter().for_each(|node| {
-    //     debug!("node: name{}", node.name);
-    // });
-    // while(true) {}
-    </span>UART.init();
+    UART.init();
     <span class="macro">println!</span>(<span class="string">"KERN: init plic"</span>);
     <span class="comment">// println!("KERN: init gpu");
     // let _gpu = GPU_DEVICE.clone();
@@ -302,7 +289,8 @@
 <span class="kw">impl </span>PageAlloc <span class="kw">for </span>PageAllocImpl {
     <span class="attr">#[inline]
     </span><span class="kw">fn </span>alloc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PhysPage {
-        mm::frame_alloc_persist().expect(<span class="string">"can't find memory page"</span>)
+        <span class="kw">let </span>res = mm::frame_alloc_persist().expect(<span class="string">"can't find memory page"</span>);
+        res
     }
 
     <span class="attr">#[inline]

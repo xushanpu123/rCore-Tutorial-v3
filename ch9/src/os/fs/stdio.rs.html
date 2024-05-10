@@ -41,7 +41,12 @@
 <a href="#39" id="39">39</a>
 <a href="#40" id="40">40</a>
 <a href="#41" id="41">41</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::File;
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>log::warn;
+
+<span class="kw">use </span><span class="kw">super</span>::File;
 <span class="kw">use </span><span class="kw">crate</span>::drivers::chardev::CharDevice;
 <span class="kw">use </span><span class="kw">crate</span>::drivers::chardev::UART;
 
@@ -78,6 +83,7 @@
         <span class="macro">panic!</span>(<span class="string">"Cannot read from stdout!"</span>);
     }
     <span class="kw">fn </span>write(<span class="kw-2">&amp;</span><span class="self">self</span>, user_buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; usize {
+        <span class="macro">warn!</span>(<span class="string">"user buf addr: {:p}"</span>, user_buf.as_ptr());
         <span class="macro">print!</span>(<span class="string">"{}"</span>, core::str::from_utf8(user_buf).unwrap());
         <span class="number">1
     </span>}

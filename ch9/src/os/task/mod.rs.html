@@ -188,7 +188,7 @@
 
 <span class="kw">use </span><span class="self">self</span>::id::TaskUserRes;
 <span class="kw">use </span><span class="kw">crate</span>::fs::{open_file, OpenFlags};
-<span class="kw">use </span><span class="kw">crate</span>::sbi::shutdown;
+<span class="kw">use </span>polyhal::shutdown;
 <span class="kw">use </span>polyhal::{run_user_task, KContext, TrapFrame};
 <span class="kw">use </span>alloc::{sync::Arc, vec::Vec};
 <span class="kw">use </span>lazy_static::<span class="kw-2">*</span>;
@@ -274,10 +274,10 @@
             );
             <span class="kw">if </span>exit_code != <span class="number">0 </span>{
                 <span class="comment">//crate::sbi::shutdown(255); //255 == -1 for err hint
-                </span>shutdown(<span class="bool-val">true</span>);
+                </span>shutdown();
             } <span class="kw">else </span>{
                 <span class="comment">//crate::sbi::shutdown(0); //0 for success hint
-                </span>shutdown(<span class="bool-val">false</span>);
+                </span>shutdown();
             }
         }
         remove_from_pid2process(pid);
