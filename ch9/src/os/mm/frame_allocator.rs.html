@@ -177,6 +177,7 @@
 <a href="#175" id="175">175</a>
 <a href="#176" id="176">176</a>
 <a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::sync::UPIntrFreeCell;
 <span class="kw">use </span>alloc::vec::Vec;
 <span class="kw">use </span>core::fmt::{<span class="self">self</span>, Debug, Formatter};
@@ -300,6 +301,7 @@
         .exclusive_access()
         .alloc()
         .map(FrameTracker::new)
+        .inspect(|x| x.ppn.drop_clear())
 }
 
 <span class="kw">pub fn </span>frame_alloc_more(num: usize) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;FrameTracker&gt;&gt; {

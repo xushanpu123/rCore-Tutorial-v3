@@ -117,7 +117,7 @@
 <span class="kw">use </span>alloc::sync::Arc;
 <span class="kw">use </span>lazy_static::<span class="kw-2">*</span>;
 <span class="kw">use </span>log::debug;
-<span class="kw">use </span>polyhal::{context_switch_pt, kernel_page_table, KContext, TrapFrame};
+<span class="kw">use </span>polyhal::{context_switch_pt, kernel_page_table, KContext, TrapFrame, context_switch};
 
 <span class="kw">pub struct </span>Processor {
     current: <span class="prelude-ty">Option</span>&lt;Arc&lt;TaskControlBlock&gt;&gt;,

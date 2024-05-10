@@ -149,6 +149,7 @@
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
 </pre></div><pre class="rust"><code><span class="attr">#![no_std]
 #![no_main]
 #![feature(panic_info_message)]
@@ -183,7 +184,7 @@
 <span class="kw">use </span>lazy_static::<span class="kw-2">*</span>;
 <span class="kw">use </span>sync::UPIntrFreeCell;
 <span class="kw">use crate</span>::{syscall::syscall, task::check_signals_of_current};
-<span class="kw">use </span><span class="kw">crate</span>::task::exit_current_and_run_next;
+<span class="kw">use </span><span class="kw">crate</span>::task::{current_process, exit_current_and_run_next};
 <span class="kw">use </span>polyhal::{debug, TrapType::<span class="kw-2">*</span>};
 <span class="kw">use </span>log::<span class="kw-2">*</span>;
 <span class="kw">use </span>polyhal::{addr::PhysPage, get_mem_areas, PageAlloc, TrapFrame, TrapFrameArgs, TrapType, get_cpu_num, get_fdt};
@@ -229,8 +230,8 @@
             current_add_signal(SignalFlags::SIGILL);
         }
         Time =&gt; {
-            suspend_current_and_run_next();
-        }
+            <span class="comment">// suspend_current_and_run_next();
+        </span>}
         SupervisorExternal =&gt; {
             <span class="macro">log::debug!</span>(<span class="string">"entry SupervisorExternal"</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>plic: PLIC = <span class="kw">unsafe </span>{ PLIC::new(VIRT_PLIC) };
@@ -290,6 +291,7 @@
     <span class="attr">#[inline]
     </span><span class="kw">fn </span>alloc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PhysPage {
         <span class="kw">let </span>res = mm::frame_alloc_persist().expect(<span class="string">"can't find memory page"</span>);
+        <span class="macro">info!</span>(<span class="string">"alloc page: {:#x?}"</span>, res.as_num() &lt;&lt; <span class="number">12</span>);
         res
     }
 

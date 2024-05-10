@@ -233,7 +233,13 @@
 <a href="#231" id="231">231</a>
 <a href="#232" id="232">232</a>
 <a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
 </pre></div><pre class="rust"><code><span class="kw">use super</span>::{frame_alloc, FrameTracker};
+<span class="kw">use </span>log::info;
 <span class="kw">use </span>polyhal::addr::{VirtAddr, VirtPage, PhysPage};
 <span class="kw">use </span><span class="kw">super</span>::VPNRange;
 <span class="kw">use </span><span class="kw">crate</span>::config::PAGE_SIZE;
@@ -292,6 +298,8 @@
     /// also returns user_sp_base and entry point.
     </span><span class="kw">pub fn </span>from_elf(elf_data: <span class="kw-2">&amp;</span>[u8]) -&gt; (<span class="self">Self</span>, usize, usize) {
         <span class="kw">let </span><span class="kw-2">mut </span>memory_set = <span class="self">Self</span>::new_bare();
+        <span class="macro">info!</span>(<span class="string">"current pagetable: {:?}"</span>, memory_set.token());
+
         <span class="comment">// map program headers of elf, with U flag
         </span><span class="kw">let </span>elf = xmas_elf::ElfFile::new(elf_data).unwrap();
         <span class="kw">let </span>elf_header = elf.header;
@@ -315,6 +323,7 @@
                 <span class="kw">if </span>ph_flags.is_execute() {
                     map_perm |= MapPermission::X;
                 }
+                <span class="macro">info!</span>(<span class="string">"start_va: {:?}, end_va: {:?}"</span>, start_va, end_va);
                 <span class="kw">let </span>map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
                 max_end_vpn = map_area.vpn_range.get_end();
                 memory_set.push(
@@ -400,6 +409,7 @@
             <span class="comment">// self.map_one(page_table, vpn);
             </span><span class="kw">let </span>p_tracker = frame_alloc().expect(<span class="string">"can't allocate frame"</span>);
             page_table.map_page(vpn, p_tracker.ppn, <span class="self">self</span>.map_perm.into(), MappingSize::Page4KB);
+            <span class="macro">info!</span>(<span class="string">"vpn: {:?}, ppn: {:?}"</span>, vpn, p_tracker.ppn);
             <span class="self">self</span>.data_frames.insert(vpn, p_tracker);
         }
     }
