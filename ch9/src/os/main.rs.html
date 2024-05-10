@@ -146,10 +146,6 @@
 <a href="#144" id="144">144</a>
 <a href="#145" id="145">145</a>
 <a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
 </pre></div><pre class="rust"><code><span class="attr">#![no_std]
 #![no_main]
 #![feature(panic_info_message)]
@@ -201,9 +197,7 @@
 
 <span class="attr">#[polyhal::arch_interrupt]
 </span><span class="kw">fn </span>kernel_interrupt(ctx: <span class="kw-2">&amp;mut </span>TrapFrame, trap_type: TrapType) {
-    <span class="macro">log::info!</span>(<span class="string">"trap_type @ {:x?}"</span>, trap_type);
-    <span class="comment">// info!("current_task id: {}", current_task().is_some());
-    </span><span class="kw">match </span>trap_type {
+    <span class="kw">match </span>trap_type {
         Breakpoint =&gt; <span class="kw">return</span>,
         UserEnvCall =&gt; {
             <span class="comment">// jump to next instruction anyway
@@ -233,9 +227,9 @@
             <span class="comment">// suspend_current_and_run_next();
         </span>}
         SupervisorExternal =&gt; {
-            <span class="macro">log::debug!</span>(<span class="string">"entry SupervisorExternal"</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>plic: PLIC = <span class="kw">unsafe </span>{ PLIC::new(VIRT_PLIC) };
             <span class="kw">let </span>intr_src_id = plic.claim(<span class="number">0</span>, IntrTargetPriority::Supervisor);
+            <span class="macro">log::trace!</span>(<span class="string">"entry SupervisorExternal, intr_src_id: {}"</span>, intr_src_id);
             <span class="kw">match </span>intr_src_id {
                 <span class="number">5 </span>=&gt; KEYBOARD_DEVICE.handle_irq(),
                 <span class="number">6 </span>=&gt; MOUSE_DEVICE.handle_irq(),
@@ -255,7 +249,6 @@
         <span class="comment">// panic!("end");
         </span>exit_current_and_run_next(errno);
     }
-    <span class="macro">info!</span>(<span class="string">"end of trap"</span>);
 }
 
 <span class="attr">#[polyhal::arch_entry]
@@ -276,8 +269,8 @@
     // let _mouse = MOUSE_DEVICE.clone();
     // println!("KERN: init trap");
     // timer::set_next_trigger();
-    // board::device_init();
-    </span>fs::list_apps();
+    </span>board::device_init();
+    fs::list_apps();
     task::add_initproc();
     <span class="kw-2">*</span>DEV_NON_BLOCKING_ACCESS.exclusive_access() = <span class="bool-val">true</span>;
     task::run_tasks();
@@ -291,7 +284,6 @@
     <span class="attr">#[inline]
     </span><span class="kw">fn </span>alloc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PhysPage {
         <span class="kw">let </span>res = mm::frame_alloc_persist().expect(<span class="string">"can't find memory page"</span>);
-        <span class="macro">info!</span>(<span class="string">"alloc page: {:#x?}"</span>, res.as_num() &lt;&lt; <span class="number">12</span>);
         res
     }
 

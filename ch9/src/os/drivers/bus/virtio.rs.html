@@ -89,8 +89,8 @@
     </span>}
 
     <span class="kw">fn </span>phys_to_virt(addr: usize) -&gt; usize {
-        addr
-    }
+        addr + <span class="number">0xffff_ffc0_0000_0000
+    </span>}
 
     <span class="kw">fn </span>virt_to_phys(vaddr: usize) -&gt; usize {
         vaddr - <span class="number">0xffff_ffc0_0000_0000

@@ -119,12 +119,14 @@
 <a href="#117" id="117">117</a>
 <a href="#118" id="118">118</a>
 <a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::fs::{open_file, OpenFlags};
 <span class="kw">use </span><span class="kw">crate</span>::mm::{translated_ref, translated_refmut, translated_str};
 <span class="kw">use </span><span class="kw">crate</span>::task::{
     current_process, current_task, exit_current_and_run_next, pid2process,
     suspend_current_and_run_next, SignalFlags,
 };
+<span class="kw">use </span>log::{debug, info};
 <span class="kw">use </span>polyhal::pagetable::PageTable;
 <span class="kw">use </span>polyhal::TrapFrameArgs;
 <span class="kw">use </span>alloc::string::String;

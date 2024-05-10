@@ -134,16 +134,24 @@
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::sync::{Condvar, Mutex, MutexBlocking, MutexSpin, Semaphore};
-<span class="kw">use </span><span class="kw">crate</span>::task::{block_current_and_run_next, current_process, current_task};
+<span class="kw">use </span><span class="kw">crate</span>::task::{block_current_and_run_next, current_process, current_task, suspend_current_and_run_next};
 <span class="kw">use </span><span class="kw">crate</span>::timer::{add_timer, get_time_ms};
 <span class="kw">use </span>alloc::sync::Arc;
+<span class="kw">use </span>polyhal::time::Time;
 
 <span class="kw">pub fn </span>sys_sleep(ms: usize) -&gt; isize {
-    <span class="kw">let </span>expire_ms = get_time_ms() + ms;
-    <span class="kw">let </span>task = current_task().unwrap();
-    add_timer(expire_ms, task);
-    block_current_and_run_next();
+    <span class="kw">let </span>target_ms = Time::now().to_msec() + ms;
+    <span class="kw">loop </span>{
+        <span class="kw">if </span>Time::now().to_msec() &gt;= target_ms {
+            <span class="kw">break</span>;
+        }
+        suspend_current_and_run_next();
+    }
     <span class="number">0
 </span>}
 

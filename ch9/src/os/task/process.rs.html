@@ -280,7 +280,6 @@
 <a href="#278" id="278">278</a>
 <a href="#279" id="279">279</a>
 <a href="#280" id="280">280</a>
-<a href="#281" id="281">281</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::task_entry;
 <span class="kw">use </span>log::<span class="kw-2">*</span>;
 <span class="kw">use </span><span class="kw">super</span>::id::RecycleAllocator;
@@ -480,7 +479,6 @@
         trap_cx[TrapFrameArgs::SP] = user_sp;
         trap_cx[TrapFrameArgs::ARG0] = args.len();
         trap_cx[TrapFrameArgs::ARG1] = argv_base;
-        <span class="macro">info!</span>(<span class="string">"exec end"</span>);
         <span class="comment">// trap_cx.x[10] = args.len();
         // trap_cx.x[11] = argv_base;
         </span><span class="kw-2">*</span>task_inner.get_trap_cx() = trap_cx;

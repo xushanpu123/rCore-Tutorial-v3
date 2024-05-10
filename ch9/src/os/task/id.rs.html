@@ -195,7 +195,6 @@
 <a href="#193" id="193">193</a>
 <a href="#194" id="194">194</a>
 <a href="#195" id="195">195</a>
-<a href="#196" id="196">196</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::mem::size_of;
 <span class="kw">use </span><span class="kw">super</span>::ProcessControlBlock;
 <span class="kw">use </span>polyhal::TrapFrame;
@@ -317,7 +316,6 @@
         <span class="comment">// alloc user stack
         </span><span class="kw">let </span>ustack_bottom = ustack_bottom_from_tid(<span class="self">self</span>.ustack_base, <span class="self">self</span>.tid);
         <span class="kw">let </span>ustack_top = ustack_bottom + USER_STACK_SIZE;
-        <span class="macro">info!</span>(<span class="string">"user stack {:#x} - {:#x}"</span>, ustack_bottom, ustack_top);
         process_inner.memory_set.insert_framed_area(
             ustack_bottom.into(),
             ustack_top.into(),
