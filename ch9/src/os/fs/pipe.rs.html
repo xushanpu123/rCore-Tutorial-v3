@@ -172,9 +172,7 @@
 <a href="#170" id="170">170</a>
 <a href="#171" id="171">171</a>
 <a href="#172" id="172">172</a>
-<a href="#173" id="173">173</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::File;
-<span class="kw">use </span><span class="kw">crate</span>::mm::UserBuffer;
 <span class="kw">use </span><span class="kw">crate</span>::sync::UPIntrFreeCell;
 <span class="kw">use </span>alloc::sync::{Arc, Weak};
 
@@ -287,7 +285,7 @@
     <span class="kw">fn </span>writable(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="self">self</span>.writable
     }
-    <span class="kw">fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>, buf: UserBuffer) -&gt; usize {
+    <span class="kw">fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; usize {
         <span class="macro">assert!</span>(<span class="self">self</span>.readable());
         <span class="kw">let </span>want_to_read = buf.len();
         <span class="kw">let </span><span class="kw-2">mut </span>buf_iter = buf.into_iter();
@@ -318,7 +316,7 @@
             }
         }
     }
-    <span class="kw">fn </span>write(<span class="kw-2">&amp;</span><span class="self">self</span>, buf: UserBuffer) -&gt; usize {
+    <span class="kw">fn </span>write(<span class="kw-2">&amp;</span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; usize {
         <span class="macro">assert!</span>(<span class="self">self</span>.writable());
         <span class="kw">let </span>want_to_write = buf.len();
         <span class="kw">let </span><span class="kw-2">mut </span>buf_iter = buf.into_iter();

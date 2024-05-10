@@ -103,27 +103,32 @@
 <a href="#101" id="101">101</a>
 <a href="#102" id="102">102</a>
 <a href="#103" id="103">103</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::__switch;
-<span class="kw">use super</span>::{fetch_task, TaskStatus};
-<span class="kw">use super</span>::{ProcessControlBlock, TaskContext, TaskControlBlock};
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+</pre></div><pre class="rust"><code><span class="kw">use super</span>::{fetch_task, TaskStatus};
+<span class="kw">use super</span>::{ProcessControlBlock, TaskControlBlock};
 <span class="kw">use </span><span class="kw">crate</span>::sync::UPIntrFreeCell;
-<span class="kw">use </span><span class="kw">crate</span>::trap::TrapContext;
 <span class="kw">use </span>alloc::sync::Arc;
 <span class="kw">use </span>lazy_static::<span class="kw-2">*</span>;
+<span class="kw">use </span>polyhal::{context_switch_pt, kernel_page_table, KContext, TrapFrame};
 
 <span class="kw">pub struct </span>Processor {
     current: <span class="prelude-ty">Option</span>&lt;Arc&lt;TaskControlBlock&gt;&gt;,
-    idle_task_cx: TaskContext,
+    idle_task_cx: KContext,
 }
 
 <span class="kw">impl </span>Processor {
     <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             current: <span class="prelude-val">None</span>,
-            idle_task_cx: TaskContext::zero_init(),
+            idle_task_cx: KContext::blank(),
         }
     }
-    <span class="kw">fn </span>get_idle_task_cx_ptr(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">*mut </span>TaskContext {
+    <span class="kw">fn </span>get_idle_task_cx_ptr(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">*mut </span>KContext {
         <span class="kw-2">&amp;mut </span><span class="self">self</span>.idle_task_cx <span class="kw">as </span><span class="kw-2">*mut </span><span class="kw">_
     </span>}
     <span class="kw">pub fn </span>take_current(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Arc&lt;TaskControlBlock&gt;&gt; {
@@ -135,25 +140,31 @@
 }
 
 <span class="macro">lazy_static! </span>{
-    <span class="kw">pub static </span><span class="kw-2">ref </span>PROCESSOR: UPIntrFreeCell&lt;Processor&gt; =
-        <span class="kw">unsafe </span>{ UPIntrFreeCell::new(Processor::new()) };
+    <span class="kw">pub static </span><span class="kw-2">ref </span>PROCESSOR: UPIntrFreeCell&lt;Processor&gt; = <span class="kw">unsafe </span>{ UPIntrFreeCell::new(Processor::new()) };
 }
 
 <span class="kw">pub fn </span>run_tasks() {
     <span class="kw">loop </span>{
         <span class="kw">let </span><span class="kw-2">mut </span>processor = PROCESSOR.exclusive_access();
         <span class="kw">if let </span><span class="prelude-val">Some</span>(task) = fetch_task() {
+            <span class="kw">let </span>page_table = task.page_table_token();
             <span class="kw">let </span>idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
             <span class="comment">// access coming task TCB exclusively
-            </span><span class="kw">let </span>next_task_cx_ptr = task.inner.exclusive_session(|task_inner| {
-                task_inner.task_status = TaskStatus::Running;
-                <span class="kw-2">&amp;</span>task_inner.task_cx <span class="kw">as </span><span class="kw-2">*const </span>TaskContext
-            });
-            processor.current = <span class="prelude-val">Some</span>(task);
+            </span><span class="kw">let </span><span class="kw-2">mut </span>task_inner = task.inner_exclusive_access();
+            <span class="kw">let </span>next_task_cx_ptr = <span class="kw-2">&amp;</span>task_inner.task_cx <span class="kw">as </span><span class="kw-2">*const </span>KContext;
+            task_inner.task_status = TaskStatus::Running;
+            drop(task_inner);
+            <span class="comment">// release coming task TCB manually
+            </span>processor.current = <span class="prelude-val">Some</span>(task);
             <span class="comment">// release processor manually
             </span>drop(processor);
-            <span class="kw">unsafe </span>{
-                __switch(idle_task_cx_ptr, next_task_cx_ptr);
+            <span class="comment">// FIXME: context switch
+            // unsafe {
+            //     __switch(idle_task_cx_ptr, next_task_cx_ptr);
+            // }
+            // info!("switch to task: {:#x?}", unsafe { next_task_cx_ptr.as_ref().unwrap() });
+            </span><span class="kw">unsafe </span>{
+                context_switch_pt(idle_task_cx_ptr, next_task_cx_ptr, page_table);
             }
         } <span class="kw">else </span>{
             <span class="macro">println!</span>(<span class="string">"no tasks available in run_tasks"</span>);
@@ -173,12 +184,7 @@
     current_task().unwrap().process.upgrade().unwrap()
 }
 
-<span class="kw">pub fn </span>current_user_token() -&gt; usize {
-    <span class="kw">let </span>task = current_task().unwrap();
-    task.get_user_token()
-}
-
-<span class="kw">pub fn </span>current_trap_cx() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw-2">mut </span>TrapContext {
+<span class="kw">pub fn </span>current_trap_cx() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw-2">mut </span>TrapFrame {
     current_task()
         .unwrap()
         .inner_exclusive_access()
@@ -196,14 +202,20 @@
 }
 
 <span class="kw">pub fn </span>current_kstack_top() -&gt; usize {
-    current_task().unwrap().kstack.get_top()
-}
+    current_task().unwrap().kstack.get_position().<span class="number">1
+</span>}
 
-<span class="kw">pub fn </span>schedule(switched_task_cx_ptr: <span class="kw-2">*mut </span>TaskContext) {
-    <span class="kw">let </span>idle_task_cx_ptr =
-        PROCESSOR.exclusive_session(|processor| processor.get_idle_task_cx_ptr());
-    <span class="kw">unsafe </span>{
-        __switch(switched_task_cx_ptr, idle_task_cx_ptr);
+<span class="kw">pub fn </span>schedule(switched_task_cx_ptr: <span class="kw-2">*mut </span>KContext) {
+    <span class="kw">let </span><span class="kw-2">mut </span>processor = PROCESSOR.exclusive_access();
+    <span class="kw">let </span>idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
+    <span class="comment">// info!("schedule: {:#x?}", unsafe { switched_task_cx_ptr.as_mut().unwrap() });
+    </span>drop(processor);
+    <span class="comment">// FIXME: Switch context
+    // unsafe {
+    //     __switch(switched_task_cx_ptr, idle_task_cx_ptr);
+    // }
+    </span><span class="kw">unsafe </span>{
+        context_switch_pt(switched_task_cx_ptr, idle_task_cx_ptr, kernel_page_table());
     }
 }
 </code></pre></div></section></main></body></html>

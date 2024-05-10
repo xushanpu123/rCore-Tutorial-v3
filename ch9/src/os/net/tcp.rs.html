@@ -104,15 +104,6 @@
 <a href="#102" id="102">102</a>
 <a href="#103" id="103">103</a>
 <a href="#104" id="104">104</a>
-<a href="#105" id="105">105</a>
-<a href="#106" id="106">106</a>
-<a href="#107" id="107">107</a>
-<a href="#108" id="108">108</a>
-<a href="#109" id="109">109</a>
-<a href="#110" id="110">110</a>
-<a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a>
-<a href="#113" id="113">113</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>alloc::vec;
 <span class="kw">use </span>lose_net_stack::packets::tcp::TCPPacket;
 <span class="kw">use </span>lose_net_stack::IPv4;
@@ -162,22 +153,15 @@
         <span class="bool-val">true
     </span>}
 
-    <span class="kw">fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>buf: <span class="kw">crate</span>::mm::UserBuffer) -&gt; usize {
+    <span class="kw">fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; usize {
         <span class="kw">loop </span>{
             <span class="kw">if let </span><span class="prelude-val">Some</span>(data) = pop_data(<span class="self">self</span>.socket_index) {
                 <span class="kw">let </span>data_len = data.len();
                 <span class="kw">let </span><span class="kw-2">mut </span>left = <span class="number">0</span>;
-                <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..buf.buffers.len() {
-                    <span class="kw">let </span>buffer_i_len = buf.buffers[i].len().min(data_len - left);
-
-                    buf.buffers[i][..buffer_i_len]
-                        .copy_from_slice(<span class="kw-2">&amp;</span>data[left..(left + buffer_i_len)]);
-
-                    left += buffer_i_len;
-                    <span class="kw">if </span>left == data_len {
-                        <span class="kw">break</span>;
-                    }
-                }
+                <span class="kw">let </span>buffer_i_len = buf.len().min(data_len - left);
+                buf[..buffer_i_len]
+                    .copy_from_slice(<span class="kw-2">&amp;</span>data[left..(left + buffer_i_len)]);
+                left += buffer_i_len;
                 <span class="kw">return </span>left;
             } <span class="kw">else </span>{
                 net_interrupt_handler();
@@ -185,16 +169,14 @@
         }
     }
 
-    <span class="kw">fn </span>write(<span class="kw-2">&amp;</span><span class="self">self</span>, buf: <span class="kw">crate</span>::mm::UserBuffer) -&gt; usize {
+    <span class="kw">fn </span>write(<span class="kw-2">&amp;</span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; usize {
         <span class="kw">let </span>lose_net_stack = LOSE_NET_STACK.<span class="number">0</span>.exclusive_access();
 
         <span class="kw">let </span><span class="kw-2">mut </span>data = <span class="macro">vec!</span>[<span class="number">0u8</span>; buf.len()];
 
         <span class="kw">let </span><span class="kw-2">mut </span>left = <span class="number">0</span>;
-        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..buf.buffers.len() {
-            data[left..(left + buf.buffers[i].len())].copy_from_slice(buf.buffers[i]);
-            left += buf.buffers[i].len();
-        }
+        data[left..(left + buf.len())].copy_from_slice(buf);
+        left += buf.len();
 
         <span class="kw">let </span>len = data.len();
 

@@ -85,16 +85,15 @@
 <a href="#83" id="83">83</a>
 <a href="#84" id="84">84</a>
 <a href="#85" id="85">85</a>
-</pre></div><pre class="rust"><code><span class="kw">use crate</span>::{
-    mm::kernel_token,
-    task::{add_task, current_task, TaskControlBlock},
-    trap::{trap_handler, TrapContext},
-};
+<a href="#86" id="86">86</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::task::{add_task, current_task, TaskControlBlock};
 <span class="kw">use </span>alloc::sync::Arc;
+<span class="kw">use </span>polyhal::TrapFrameArgs;
 
 <span class="kw">pub fn </span>sys_thread_create(entry: usize, arg: usize) -&gt; isize {
     <span class="kw">let </span>task = current_task().unwrap();
     <span class="kw">let </span>process = task.process.upgrade().unwrap();
+    <span class="kw">let </span>page_table = process.inner_exclusive_access().get_user_token();
     <span class="comment">// create a new thread
     </span><span class="kw">let </span>new_task = Arc::new(TaskControlBlock::new(
         Arc::clone(<span class="kw-2">&amp;</span>process),
@@ -104,6 +103,7 @@
             .unwrap()
             .ustack_base,
         <span class="bool-val">true</span>,
+        page_table
     ));
     <span class="comment">// add new task to scheduler
     </span>add_task(Arc::clone(<span class="kw-2">&amp;</span>new_task));
@@ -118,13 +118,15 @@
     }
     tasks[new_task_tid] = <span class="prelude-val">Some</span>(Arc::clone(<span class="kw-2">&amp;</span>new_task));
     <span class="kw">let </span>new_task_trap_cx = new_task_inner.get_trap_cx();
-    <span class="kw-2">*</span>new_task_trap_cx = TrapContext::app_init_context(
-        entry,
-        new_task_res.ustack_top(),
-        kernel_token(),
-        new_task.kstack.get_top(),
-        trap_handler <span class="kw">as </span>usize,
-    );
+    <span class="comment">// *new_task_trap_cx = TrapContext::app_init_context(
+    //     entry,
+    //     new_task_res.ustack_top(),
+    //     kernel_token(),
+    //     new_task.kstack.get_top(),
+    //     trap_handler as usize,
+    // );
+    </span>new_task_trap_cx[TrapFrameArgs::SEPC] = entry;
+    new_task_trap_cx[TrapFrameArgs::SP] = new_task_res.ustack_top(); 
     (<span class="kw-2">*</span>new_task_trap_cx).x[<span class="number">10</span>] = arg;
     new_task_tid <span class="kw">as </span>isize
 }

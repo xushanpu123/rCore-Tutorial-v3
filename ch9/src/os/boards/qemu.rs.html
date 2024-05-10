@@ -68,8 +68,8 @@
 <span class="kw">pub type </span>BlockDeviceImpl = <span class="kw">crate</span>::drivers::block::VirtIOBlock;
 <span class="kw">pub type </span>CharDeviceImpl = <span class="kw">crate</span>::drivers::chardev::NS16550a&lt;VIRT_UART&gt;;
 
-<span class="kw">pub const </span>VIRT_PLIC: usize = <span class="number">0xC00_0000</span>;
-<span class="kw">pub const </span>VIRT_UART: usize = <span class="number">0x1000_0000</span>;
+<span class="kw">pub const </span>VIRT_PLIC: usize = <span class="number">0xC00_0000 </span>+ <span class="number">0xffff_ffc0_0000_0000</span>;
+<span class="kw">pub const </span>VIRT_UART: usize = <span class="number">0x1000_0000 </span>+ <span class="number">0xffff_ffc0_0000_0000</span>;
 <span class="attr">#[allow(unused)]
 </span><span class="kw">pub const </span>VIRTGPU_XRES: u32 = <span class="number">1280</span>;
 <span class="attr">#[allow(unused)]

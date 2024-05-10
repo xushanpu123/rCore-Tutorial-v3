@@ -14,13 +14,6 @@
 <a href="#12" id="12">12</a>
 <a href="#13" id="13">13</a>
 <a href="#14" id="14">14</a>
-<a href="#15" id="15">15</a>
-<a href="#16" id="16">16</a>
-<a href="#17" id="17">17</a>
-<a href="#18" id="18">18</a>
-<a href="#19" id="19">19</a>
-<a href="#20" id="20">20</a>
-<a href="#21" id="21">21</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>address;
 <span class="kw">mod </span>frame_allocator;
 <span class="kw">mod </span>heap_allocator;
@@ -28,18 +21,11 @@
 <span class="kw">mod </span>page_table;
 
 <span class="kw">pub use </span>address::VPNRange;
-<span class="kw">pub use </span>address::{PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
-<span class="kw">pub use </span>frame_allocator::{frame_alloc, frame_alloc_more, frame_dealloc, FrameTracker};
-<span class="kw">pub use </span>memory_set::{kernel_token, MapArea, MapPermission, MapType, MemorySet, KERNEL_SPACE};
-<span class="kw">use </span>page_table::PTEFlags;
-<span class="kw">pub use </span>page_table::{
-    translated_byte_buffer, translated_ref, translated_refmut, translated_str, PageTable,
-    PageTableEntry, UserBuffer,
-};
+<span class="kw">pub use </span>frame_allocator::{frame_alloc, frame_alloc_persist, frame_alloc_more, frame_dealloc, FrameTracker, init_frame_allocator};
+<span class="kw">pub use </span>memory_set::{MapArea, MapPermission, MapType, MemorySet};
+<span class="kw">pub use </span>page_table::{translated_byte_buffer, translated_ref, translated_refmut, translated_str};
 
 <span class="kw">pub fn </span>init() {
     heap_allocator::init_heap();
-    frame_allocator::init_frame_allocator();
-    KERNEL_SPACE.exclusive_access().activate();
 }
 </code></pre></div></section></main></body></html>

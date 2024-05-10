@@ -131,23 +131,15 @@
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::File;
 <span class="kw">use </span><span class="kw">crate</span>::drivers::BLOCK_DEVICE;
-<span class="kw">use </span><span class="kw">crate</span>::mm::UserBuffer;
 <span class="kw">use </span><span class="kw">crate</span>::sync::UPIntrFreeCell;
 <span class="kw">use </span>alloc::sync::Arc;
 <span class="kw">use </span>alloc::vec::Vec;
 <span class="kw">use </span>bitflags::<span class="kw-2">*</span>;
 <span class="kw">use </span>easy_fs::{EasyFileSystem, Inode};
 <span class="kw">use </span>lazy_static::<span class="kw-2">*</span>;
+<span class="kw">use </span>log::error;
 
 <span class="kw">pub struct </span>OSInode {
     readable: bool,
@@ -253,28 +245,20 @@
     <span class="kw">fn </span>writable(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="self">self</span>.writable
     }
-    <span class="kw">fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>buf: UserBuffer) -&gt; usize {
+    <span class="kw">fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; usize {
         <span class="kw">let </span><span class="kw-2">mut </span>inner = <span class="self">self</span>.inner.exclusive_access();
         <span class="kw">let </span><span class="kw-2">mut </span>total_read_size = <span class="number">0usize</span>;
-        <span class="kw">for </span>slice <span class="kw">in </span>buf.buffers.iter_mut() {
-            <span class="kw">let </span>read_size = inner.inode.read_at(inner.offset, <span class="kw-2">*</span>slice);
-            <span class="kw">if </span>read_size == <span class="number">0 </span>{
-                <span class="kw">break</span>;
-            }
-            inner.offset += read_size;
-            total_read_size += read_size;
-        }
+        <span class="kw">let </span>read_size = inner.inode.read_at(inner.offset, buf);
+        inner.offset += read_size;
+        total_read_size += read_size;
         total_read_size
     }
-    <span class="kw">fn </span>write(<span class="kw-2">&amp;</span><span class="self">self</span>, buf: UserBuffer) -&gt; usize {
+    <span class="kw">fn </span>write(<span class="kw-2">&amp;</span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; usize {
         <span class="kw">let </span><span class="kw-2">mut </span>inner = <span class="self">self</span>.inner.exclusive_access();
         <span class="kw">let </span><span class="kw-2">mut </span>total_write_size = <span class="number">0usize</span>;
-        <span class="kw">for </span>slice <span class="kw">in </span>buf.buffers.iter() {
-            <span class="kw">let </span>write_size = inner.inode.write_at(inner.offset, <span class="kw-2">*</span>slice);
-            <span class="macro">assert_eq!</span>(write_size, slice.len());
+            <span class="kw">let </span>write_size = inner.inode.write_at(inner.offset, buf);
             inner.offset += write_size;
             total_write_size += write_size;
-        }
         total_write_size
     }
 }

@@ -196,45 +196,19 @@
 <a href="#194" id="194">194</a>
 <a href="#195" id="195">195</a>
 <a href="#196" id="196">196</a>
-<a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
-<a href="#199" id="199">199</a>
-<a href="#200" id="200">200</a>
-<a href="#201" id="201">201</a>
-<a href="#202" id="202">202</a>
-<a href="#203" id="203">203</a>
-<a href="#204" id="204">204</a>
-<a href="#205" id="205">205</a>
-<a href="#206" id="206">206</a>
-<a href="#207" id="207">207</a>
-<a href="#208" id="208">208</a>
-<a href="#209" id="209">209</a>
-<a href="#210" id="210">210</a>
-<a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a>
-<a href="#213" id="213">213</a>
-<a href="#214" id="214">214</a>
-<a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a>
-<a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a>
-<a href="#226" id="226">226</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::ProcessControlBlock;
-<span class="kw">use </span><span class="kw">crate</span>::config::{KERNEL_STACK_SIZE, PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT_BASE, USER_STACK_SIZE};
-<span class="kw">use </span><span class="kw">crate</span>::mm::{MapPermission, PhysPageNum, VirtAddr, KERNEL_SPACE};
+</pre></div><pre class="rust"><code><span class="kw">use </span>core::mem::size_of;
+<span class="kw">use </span><span class="kw">super</span>::ProcessControlBlock;
+<span class="kw">use </span>polyhal::TrapFrame;
+<span class="kw">use </span><span class="kw">crate</span>::config::{KERNEL_STACK_SIZE, PAGE_SIZE, TRAP_CONTEXT_BASE, USER_STACK_SIZE};
+<span class="kw">use </span><span class="kw">crate</span>::mm::MapPermission;
+<span class="kw">use </span>polyhal::addr::VirtAddr;
 <span class="kw">use </span><span class="kw">crate</span>::sync::UPIntrFreeCell;
 <span class="kw">use </span>alloc::{
     sync::{Arc, Weak},
     vec::Vec,
 };
 <span class="kw">use </span>lazy_static::<span class="kw-2">*</span>;
+<span class="kw">use </span>log::<span class="kw-2">*</span>;
 
 <span class="kw">pub struct </span>RecycleAllocator {
     current: usize,
@@ -288,53 +262,20 @@
     }
 }
 
-<span class="doccomment">/// Return (bottom, top) of a kernel stack in kernel space.
-</span><span class="kw">pub fn </span>kernel_stack_position(kstack_id: usize) -&gt; (usize, usize) {
-    <span class="kw">let </span>top = TRAMPOLINE - kstack_id * (KERNEL_STACK_SIZE + PAGE_SIZE);
-    <span class="kw">let </span>bottom = top - KERNEL_STACK_SIZE;
-    (bottom, top)
-}
-
-<span class="kw">pub struct </span>KernelStack(<span class="kw">pub </span>usize);
-
-<span class="kw">pub fn </span>kstack_alloc() -&gt; KernelStack {
-    <span class="kw">let </span>kstack_id = KSTACK_ALLOCATOR.exclusive_access().alloc();
-    <span class="kw">let </span>(kstack_bottom, kstack_top) = kernel_stack_position(kstack_id);
-    KERNEL_SPACE.exclusive_access().insert_framed_area(
-        kstack_bottom.into(),
-        kstack_top.into(),
-        MapPermission::R | MapPermission::W,
-    );
-    KernelStack(kstack_id)
-}
-
-<span class="kw">impl </span>Drop <span class="kw">for </span>KernelStack {
-    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="kw">let </span>(kernel_stack_bottom, <span class="kw">_</span>) = kernel_stack_position(<span class="self">self</span>.<span class="number">0</span>);
-        <span class="kw">let </span>kernel_stack_bottom_va: VirtAddr = kernel_stack_bottom.into();
-        KERNEL_SPACE
-            .exclusive_access()
-            .remove_area_with_start_vpn(kernel_stack_bottom_va.into());
-        KSTACK_ALLOCATOR.exclusive_access().dealloc(<span class="self">self</span>.<span class="number">0</span>);
-    }
+<span class="kw">pub struct </span>KernelStack {
+    inner: Arc&lt;[u128; KERNEL_STACK_SIZE / size_of::&lt;u128&gt;()]&gt;,
 }
 
 <span class="kw">impl </span>KernelStack {
-    <span class="attr">#[allow(unused)]
-    </span><span class="kw">pub fn </span>push_on_top&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, value: T) -&gt; <span class="kw-2">*mut </span>T
-    <span class="kw">where
-        </span>T: Sized,
-    {
-        <span class="kw">let </span>kernel_stack_top = <span class="self">self</span>.get_top();
-        <span class="kw">let </span>ptr_mut = (kernel_stack_top - core::mem::size_of::&lt;T&gt;()) <span class="kw">as </span><span class="kw-2">*mut </span>T;
-        <span class="kw">unsafe </span>{
-            <span class="kw-2">*</span>ptr_mut = value;
+    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            inner: Arc::new([<span class="number">0u128</span>; KERNEL_STACK_SIZE / size_of::&lt;u128&gt;()]),
         }
-        ptr_mut
     }
-    <span class="kw">pub fn </span>get_top(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        <span class="kw">let </span>(<span class="kw">_</span>, kernel_stack_top) = kernel_stack_position(<span class="self">self</span>.<span class="number">0</span>);
-        kernel_stack_top
+
+    <span class="kw">pub fn </span>get_position(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (usize, usize) {
+        <span class="kw">let </span>bottom = <span class="self">self</span>.inner.as_ptr() <span class="kw">as </span>usize;
+        (bottom, bottom + KERNEL_STACK_SIZE)
     }
 }
 
@@ -376,18 +317,11 @@
         <span class="comment">// alloc user stack
         </span><span class="kw">let </span>ustack_bottom = ustack_bottom_from_tid(<span class="self">self</span>.ustack_base, <span class="self">self</span>.tid);
         <span class="kw">let </span>ustack_top = ustack_bottom + USER_STACK_SIZE;
+        <span class="macro">info!</span>(<span class="string">"user stack {:#x} - {:#x}"</span>, ustack_bottom, ustack_top);
         process_inner.memory_set.insert_framed_area(
             ustack_bottom.into(),
             ustack_top.into(),
             MapPermission::R | MapPermission::W | MapPermission::U,
-        );
-        <span class="comment">// alloc trap_cx
-        </span><span class="kw">let </span>trap_cx_bottom = trap_cx_bottom_from_tid(<span class="self">self</span>.tid);
-        <span class="kw">let </span>trap_cx_top = trap_cx_bottom + PAGE_SIZE;
-        process_inner.memory_set.insert_framed_area(
-            trap_cx_bottom.into(),
-            trap_cx_top.into(),
-            MapPermission::R | MapPermission::W,
         );
     }
 
@@ -427,15 +361,21 @@
         trap_cx_bottom_from_tid(<span class="self">self</span>.tid)
     }
 
-    <span class="kw">pub fn </span>trap_cx_ppn(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PhysPageNum {
+    <span class="kw">pub fn </span>trap_cx_ppn(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw-2">mut </span>TrapFrame {
         <span class="kw">let </span>process = <span class="self">self</span>.process.upgrade().unwrap();
         <span class="kw">let </span>process_inner = process.inner_exclusive_access();
-        <span class="kw">let </span>trap_cx_bottom_va: VirtAddr = trap_cx_bottom_from_tid(<span class="self">self</span>.tid).into();
-        process_inner
-            .memory_set
-            .translate(trap_cx_bottom_va.into())
-            .unwrap()
-            .ppn()
+        <span class="kw">let </span>task = process_inner.tasks[<span class="self">self</span>.tid].as_ref().unwrap().clone();
+        <span class="comment">// todo!("trap_cx_ppn")
+        </span><span class="macro">warn!</span>(<span class="string">"trap_cx_ppn will return trap frame"</span>);
+        <span class="kw">let </span>tref = task.inner_exclusive_access().get_trap_cx();
+        <span class="comment">// let trap_cx_bottom_va: VirtAddr = trap_cx_bottom_from_tid(self.tid).into();
+        // process_inner
+        //     .memory_set
+        //     .translate(trap_cx_bottom_va.into())
+        //     .unwrap()
+        //     .0
+        </span>drop(task);
+        tref
     }
 
     <span class="kw">pub fn </span>ustack_base(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {

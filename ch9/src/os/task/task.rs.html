@@ -80,21 +80,32 @@
 <a href="#78" id="78">78</a>
 <a href="#79" id="79">79</a>
 <a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::id::TaskUserRes;
-<span class="kw">use super</span>::{kstack_alloc, KernelStack, ProcessControlBlock, TaskContext};
-<span class="kw">use </span><span class="kw">crate</span>::trap::TrapContext;
-<span class="kw">use crate</span>::{
-    mm::PhysPageNum,
-    sync::{UPIntrFreeCell, UPIntrRefMut},
-};
+<span class="kw">use </span><span class="kw">super</span>::task_entry;
+<span class="kw">use super</span>::{KernelStack, ProcessControlBlock};
+<span class="kw">use </span>polyhal::pagetable::PageTable;
+<span class="kw">use </span><span class="kw">crate</span>::sync::{UPIntrFreeCell, UPIntrRefMut};
 <span class="kw">use </span>alloc::sync::{Arc, Weak};
+<span class="kw">use </span>polyhal::{KContext, KContextArgs, TrapFrame};
 
 <span class="kw">pub struct </span>TaskControlBlock {
     <span class="comment">// immutable
     </span><span class="kw">pub </span>process: Weak&lt;ProcessControlBlock&gt;,
     <span class="kw">pub </span>kstack: KernelStack,
+    <span class="kw">pub </span>kcontext: KContext,
     <span class="comment">// mutable
-    </span><span class="kw">pub </span>inner: UPIntrFreeCell&lt;TaskControlBlockInner&gt;,
+    </span>inner: UPIntrFreeCell&lt;TaskControlBlockInner&gt;,
 }
 
 <span class="kw">impl </span>TaskControlBlock {
@@ -102,24 +113,27 @@
         <span class="self">self</span>.inner.exclusive_access()
     }
 
-    <span class="kw">pub fn </span>get_user_token(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        <span class="kw">let </span>process = <span class="self">self</span>.process.upgrade().unwrap();
-        <span class="kw">let </span>inner = process.inner_exclusive_access();
-        inner.memory_set.token()
+    <span class="kw">pub fn </span>page_table_token(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PageTable {
+        <span class="self">self</span>.inner_exclusive_access().page_table
     }
 }
 
 <span class="kw">pub struct </span>TaskControlBlockInner {
     <span class="kw">pub </span>res: <span class="prelude-ty">Option</span>&lt;TaskUserRes&gt;,
-    <span class="kw">pub </span>trap_cx_ppn: PhysPageNum,
-    <span class="kw">pub </span>task_cx: TaskContext,
+    <span class="kw">pub </span>trap_cx: TrapFrame,
+    <span class="kw">pub </span>task_cx: KContext,
     <span class="kw">pub </span>task_status: TaskStatus,
+    <span class="kw">pub </span>page_table: PageTable,
     <span class="kw">pub </span>exit_code: <span class="prelude-ty">Option</span>&lt;i32&gt;,
 }
 
+
 <span class="kw">impl </span>TaskControlBlockInner {
-    <span class="kw">pub fn </span>get_trap_cx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw-2">mut </span>TrapContext {
-        <span class="self">self</span>.trap_cx_ppn.get_mut()
+    <span class="kw">pub fn </span>get_trap_cx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw-2">mut </span>TrapFrame {
+        <span class="kw">let </span>paddr = <span class="kw-2">&amp;</span><span class="self">self</span>.trap_cx <span class="kw">as </span><span class="kw-2">*const </span>TrapFrame <span class="kw">as </span>usize <span class="kw">as </span><span class="kw-2">*mut </span>TrapFrame;
+        <span class="comment">// let paddr: PhysAddr = self.trap_cx.into();
+        // unsafe { paddr.get_mut_ptr::&lt;TrapFrame&gt;().as_mut().unwrap() }
+        </span><span class="kw">unsafe </span>{ paddr.as_mut().unwrap() }
     }
 
     <span class="attr">#[allow(unused)]
@@ -133,19 +147,27 @@
         process: Arc&lt;ProcessControlBlock&gt;,
         ustack_base: usize,
         alloc_user_res: bool,
+        page_table: PageTable
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>res = TaskUserRes::new(Arc::clone(<span class="kw-2">&amp;</span>process), ustack_base, alloc_user_res);
-        <span class="kw">let </span>trap_cx_ppn = res.trap_cx_ppn();
-        <span class="kw">let </span>kstack = kstack_alloc();
-        <span class="kw">let </span>kstack_top = kstack.get_top();
+        <span class="comment">// let trap_cx = res.trap_cx_ppn();
+        // let kstack = kstack_alloc();
+        // let kstack_top = kstack.get_top();
+        </span><span class="kw">let </span>kstack = KernelStack::new();
+        <span class="kw">let </span>kstack_top = kstack.get_position().<span class="number">1</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>kcontext = KContext::blank();
+        kcontext[KContextArgs::KSP] = kstack_top;
+        kcontext[KContextArgs::KPC] = task_entry <span class="kw">as </span>usize;
         <span class="self">Self </span>{
             process: Arc::downgrade(<span class="kw-2">&amp;</span>process),
             kstack,
+            kcontext: KContext::blank(), 
             inner: <span class="kw">unsafe </span>{
                 UPIntrFreeCell::new(TaskControlBlockInner {
                     res: <span class="prelude-val">Some</span>(res),
-                    trap_cx_ppn,
-                    task_cx: TaskContext::goto_trap_return(kstack_top),
+                    page_table,
+                    trap_cx: TrapFrame::new(),
+                    task_cx: kcontext,
                     task_status: TaskStatus::Ready,
                     exit_code: <span class="prelude-val">None</span>,
                 })
@@ -159,5 +181,4 @@
     Ready,
     Running,
     Blocked,
-}
-</code></pre></div></section></main></body></html>
+}</code></pre></div></section></main></body></html>

@@ -117,16 +117,20 @@
 <a href="#115" id="115">115</a>
 <a href="#116" id="116">116</a>
 <a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::fs::{open_file, OpenFlags};
 <span class="kw">use </span><span class="kw">crate</span>::mm::{translated_ref, translated_refmut, translated_str};
 <span class="kw">use </span><span class="kw">crate</span>::task::{
-    current_process, current_task, current_user_token, exit_current_and_run_next, pid2process,
+    current_process, current_task, exit_current_and_run_next, pid2process,
     suspend_current_and_run_next, SignalFlags,
 };
-<span class="kw">use </span><span class="kw">crate</span>::timer::get_time_ms;
+<span class="kw">use </span>polyhal::pagetable::PageTable;
+<span class="kw">use </span>polyhal::TrapFrameArgs;
 <span class="kw">use </span>alloc::string::String;
 <span class="kw">use </span>alloc::sync::Arc;
 <span class="kw">use </span>alloc::vec::Vec;
+<span class="kw">use </span>polyhal::time::Time;
 
 <span class="kw">pub fn </span>sys_exit(exit_code: i32) -&gt; ! {
     exit_current_and_run_next(exit_code);
@@ -139,7 +143,7 @@
 </span>}
 
 <span class="kw">pub fn </span>sys_get_time() -&gt; isize {
-    get_time_ms() <span class="kw">as </span>isize
+    Time::now().to_msec() <span class="kw">as </span>isize
 }
 
 <span class="kw">pub fn </span>sys_getpid() -&gt; isize {
@@ -156,12 +160,12 @@
     <span class="kw">let </span>trap_cx = task.inner_exclusive_access().get_trap_cx();
     <span class="comment">// we do not have to move to next instruction since we have done it before
     // for child process, fork returns 0
-    </span>trap_cx.x[<span class="number">10</span>] = <span class="number">0</span>;
+    </span>trap_cx[TrapFrameArgs::RET] = <span class="number">0</span>;
     new_pid <span class="kw">as </span>isize
 }
 
 <span class="kw">pub fn </span>sys_exec(path: <span class="kw-2">*const </span>u8, <span class="kw-2">mut </span>args: <span class="kw-2">*const </span>usize) -&gt; isize {
-    <span class="kw">let </span>token = current_user_token();
+    <span class="kw">let </span>token = PageTable::current();
     <span class="kw">let </span>path = translated_str(token, path);
     <span class="kw">let </span><span class="kw-2">mut </span>args_vec: Vec&lt;String&gt; = Vec::new();
     <span class="kw">loop </span>{

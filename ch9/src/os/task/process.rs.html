@@ -258,19 +258,42 @@
 <a href="#256" id="256">256</a>
 <a href="#257" id="257">257</a>
 <a href="#258" id="258">258</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::id::RecycleAllocator;
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::task_entry;
+<span class="kw">use </span><span class="kw">super</span>::id::RecycleAllocator;
 <span class="kw">use </span><span class="kw">super</span>::manager::insert_into_pid2process;
 <span class="kw">use </span><span class="kw">super</span>::TaskControlBlock;
 <span class="kw">use super</span>::{add_task, SignalFlags};
 <span class="kw">use super</span>::{pid_alloc, PidHandle};
 <span class="kw">use </span><span class="kw">crate</span>::fs::{File, Stdin, Stdout};
-<span class="kw">use </span><span class="kw">crate</span>::mm::{translated_refmut, MemorySet, KERNEL_SPACE};
+<span class="kw">use </span><span class="kw">crate</span>::mm::{translated_refmut, MemorySet};
 <span class="kw">use </span><span class="kw">crate</span>::sync::{Condvar, Mutex, Semaphore, UPIntrFreeCell, UPIntrRefMut};
-<span class="kw">use </span><span class="kw">crate</span>::trap::{trap_handler, TrapContext};
+<span class="kw">use </span>polyhal::{KContext, KContextArgs, TrapFrame, TrapFrameArgs};
 <span class="kw">use </span>alloc::string::String;
 <span class="kw">use </span>alloc::sync::{Arc, Weak};
 <span class="kw">use </span>alloc::vec;
 <span class="kw">use </span>alloc::vec::Vec;
+<span class="kw">use </span>polyhal::pagetable::PageTable;
 
 <span class="kw">pub struct </span>ProcessControlBlock {
     <span class="comment">// immutable
@@ -296,7 +319,7 @@
 
 <span class="kw">impl </span>ProcessControlBlockInner {
     <span class="attr">#[allow(unused)]
-    </span><span class="kw">pub fn </span>get_user_token(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+    </span><span class="kw">pub fn </span>get_user_token(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PageTable {
         <span class="self">self</span>.memory_set.token()
     }
 
@@ -336,6 +359,7 @@
         </span><span class="kw">let </span>(memory_set, ustack_base, entry_point) = MemorySet::from_elf(elf_data);
         <span class="comment">// allocate a pid
         </span><span class="kw">let </span>pid_handle = pid_alloc();
+        <span class="kw">let </span>page_table = memory_set.token();
         <span class="kw">let </span>process = Arc::new(<span class="self">Self </span>{
             pid: pid_handle,
             inner: <span class="kw">unsafe </span>{
@@ -367,20 +391,26 @@
             Arc::clone(<span class="kw-2">&amp;</span>process),
             ustack_base,
             <span class="bool-val">true</span>,
+            page_table
         ));
         <span class="comment">// prepare trap_cx of main thread
-        </span><span class="kw">let </span>task_inner = task.inner_exclusive_access();
+        </span><span class="kw">let </span><span class="kw-2">mut </span>task_inner = task.inner_exclusive_access();
         <span class="kw">let </span>trap_cx = task_inner.get_trap_cx();
         <span class="kw">let </span>ustack_top = task_inner.res.as_ref().unwrap().ustack_top();
-        <span class="kw">let </span>kstack_top = task.kstack.get_top();
+        <span class="comment">// let kstack_top = task.kstack.get_top();
+        </span><span class="kw">let </span>kstack_top = task.kstack.get_position().<span class="number">1</span>;
+        task_inner.task_cx[KContextArgs::KSP] = kstack_top;
+        task_inner.task_cx[KContextArgs::KPC] = task_entry <span class="kw">as </span>usize;
         drop(task_inner);
-        <span class="kw-2">*</span>trap_cx = TrapContext::app_init_context(
-            entry_point,
-            ustack_top,
-            KERNEL_SPACE.exclusive_access().token(),
-            kstack_top,
-            trap_handler <span class="kw">as </span>usize,
-        );
+        <span class="comment">// *trap_cx = TrapContext::app_init_context(
+        //     entry_point,
+        //     ustack_top,
+        //     KERNEL_SPACE.exclusive_access().token(),
+        //     kstack_top,
+        //     trap_handler as usize,
+        // );
+        </span>trap_cx[TrapFrameArgs::SEPC] = entry_point;
+        trap_cx[TrapFrameArgs::SP] = ustack_top;
         <span class="comment">// add main thread to the process
         </span><span class="kw">let </span><span class="kw-2">mut </span>process_inner = process.inner_exclusive_access();
         process_inner.tasks.push(<span class="prelude-val">Some</span>(Arc::clone(<span class="kw-2">&amp;</span>task)));
@@ -396,6 +426,7 @@
         <span class="macro">assert_eq!</span>(<span class="self">self</span>.inner_exclusive_access().thread_count(), <span class="number">1</span>);
         <span class="comment">// memory_set with elf program headers/trampoline/trap context/user stack
         </span><span class="kw">let </span>(memory_set, ustack_base, entry_point) = MemorySet::from_elf(elf_data);
+        memory_set.activate();
         <span class="kw">let </span>new_token = memory_set.token();
         <span class="comment">// substitute memory_set
         </span><span class="self">self</span>.inner_exclusive_access().memory_set = memory_set;
@@ -405,7 +436,9 @@
         <span class="kw">let </span><span class="kw-2">mut </span>task_inner = task.inner_exclusive_access();
         task_inner.res.as_mut().unwrap().ustack_base = ustack_base;
         task_inner.res.as_mut().unwrap().alloc_user_res();
-        task_inner.trap_cx_ppn = task_inner.res.as_mut().unwrap().trap_cx_ppn();
+        <span class="comment">// task_inner.trap_cx = task_inner.res.as_mut().unwrap().trap_cx_ppn().clone();
+        </span>task_inner.trap_cx = TrapFrame::new();
+        task_inner.page_table = new_token;
         <span class="comment">// push arguments on user stack
         </span><span class="kw">let </span><span class="kw-2">mut </span>user_sp = task_inner.res.as_mut().unwrap().ustack_top();
         user_sp -= (args.len() + <span class="number">1</span>) * core::mem::size_of::&lt;usize&gt;();
@@ -432,16 +465,21 @@
         <span class="comment">// make the user_sp aligned to 8B for k210 platform
         </span>user_sp -= user_sp % core::mem::size_of::&lt;usize&gt;();
         <span class="comment">// initialize trap_cx
-        </span><span class="kw">let </span><span class="kw-2">mut </span>trap_cx = TrapContext::app_init_context(
-            entry_point,
-            user_sp,
-            KERNEL_SPACE.exclusive_access().token(),
-            task.kstack.get_top(),
-            trap_handler <span class="kw">as </span>usize,
-        );
-        trap_cx.x[<span class="number">10</span>] = args.len();
-        trap_cx.x[<span class="number">11</span>] = argv_base;
-        <span class="kw-2">*</span>task_inner.get_trap_cx() = trap_cx;
+        // let mut trap_cx = TrapContext::app_init_context(
+        //     entry_point,
+        //     user_sp,
+        //     KERNEL_SPACE.exclusive_access().token(),
+        //     task.kstack.get_top(),
+        //     trap_handler as usize,
+        // );
+        </span><span class="kw">let </span><span class="kw-2">mut </span>trap_cx = TrapFrame::new();
+        trap_cx[TrapFrameArgs::SEPC] = entry_point;
+        trap_cx[TrapFrameArgs::SP] = user_sp;
+        trap_cx[TrapFrameArgs::ARG0] = args.len();
+        trap_cx[TrapFrameArgs::ARG1] = argv_base;
+        <span class="comment">// trap_cx.x[10] = args.len();
+        // trap_cx.x[11] = argv_base;
+        </span><span class="kw-2">*</span>task_inner.get_trap_cx() = trap_cx;
     }
 
     <span class="doccomment">/// Only support processes with a single thread.
@@ -450,6 +488,7 @@
         <span class="macro">assert_eq!</span>(parent.thread_count(), <span class="number">1</span>);
         <span class="comment">// clone parent's memory_set completely including trampoline/ustacks/trap_cxs
         </span><span class="kw">let </span>memory_set = MemorySet::from_existed_user(<span class="kw-2">&amp;</span>parent.memory_set);
+        <span class="kw">let </span>page_table = memory_set.token();
         <span class="comment">// alloc a pid
         </span><span class="kw">let </span>pid = pid_alloc();
         <span class="comment">// copy fd table
@@ -496,6 +535,7 @@
             <span class="comment">// here we do not allocate trap_cx or ustack again
             // but mention that we allocate a new kstack here
             </span><span class="bool-val">false</span>,
+            page_table
         ));
         <span class="comment">// attach task to child process
         </span><span class="kw">let </span><span class="kw-2">mut </span>child_inner = child.inner_exclusive_access();
@@ -504,8 +544,10 @@
         <span class="comment">// modify kstack_top in trap_cx of this thread
         </span><span class="kw">let </span>task_inner = task.inner_exclusive_access();
         <span class="kw">let </span>trap_cx = task_inner.get_trap_cx();
-        trap_cx.kernel_sp = task.kstack.get_top();
-        drop(task_inner);
+        trap_cx.clone_from(<span class="kw-2">&amp;</span>parent.get_task(<span class="number">0</span>).inner_exclusive_access().trap_cx);
+        <span class="comment">// trap_cx.kernel_sp = task.kstack.get_top();
+        // trap_cx
+        </span>drop(task_inner);
         insert_into_pid2process(child.getpid(), Arc::clone(<span class="kw-2">&amp;</span>child));
         <span class="comment">// add this thread to scheduler
         </span>add_task(task);
@@ -515,5 +557,4 @@
     <span class="kw">pub fn </span>getpid(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.pid.<span class="number">0
     </span>}
-}
-</code></pre></div></section></main></body></html>
+}</code></pre></div></section></main></body></html>

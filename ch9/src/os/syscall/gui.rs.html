@@ -32,23 +32,19 @@
 <a href="#30" id="30">30</a>
 <a href="#31" id="31">31</a>
 <a href="#32" id="32">32</a>
-<a href="#33" id="33">33</a>
-<a href="#34" id="34">34</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::drivers::GPU_DEVICE;
-<span class="kw">use </span><span class="kw">crate</span>::mm::{MapArea, MapPermission, MapType, PhysAddr, VirtAddr};
+<span class="kw">use </span><span class="kw">crate</span>::mm::{MapArea, MapPermission, MapType};
 <span class="kw">use </span><span class="kw">crate</span>::task::current_process;
-
+<span class="kw">use </span>polyhal::addr::PhysAddr;
+<span class="kw">use </span>polyhal::addr::VirtAddr;
 <span class="kw">const </span>FB_VADDR: usize = <span class="number">0x10000000</span>;
 
 <span class="kw">pub fn </span>sys_framebuffer() -&gt; isize {
     <span class="kw">let </span>fb = GPU_DEVICE.get_framebuffer();
     <span class="kw">let </span>len = fb.len();
     <span class="comment">// println!("[kernel] FrameBuffer: addr 0x{:X}, len {}", fb.as_ptr() as usize , len);
-    </span><span class="kw">let </span>fb_start_pa = PhysAddr::from(fb.as_ptr() <span class="kw">as </span>usize);
-    <span class="macro">assert!</span>(fb_start_pa.aligned());
-    <span class="kw">let </span>fb_start_ppn = fb_start_pa.floor();
+    </span><span class="kw">let </span>fb_start_pa = PhysAddr::new(fb.as_ptr() <span class="kw">as </span>usize);
     <span class="kw">let </span>fb_start_vpn = VirtAddr::from(FB_VADDR).floor();
-    <span class="kw">let </span>pn_offset = fb_start_ppn.<span class="number">0 </span><span class="kw">as </span>isize - fb_start_vpn.<span class="number">0 </span><span class="kw">as </span>isize;
 
     <span class="kw">let </span>current_process = current_process();
     <span class="kw">let </span><span class="kw-2">mut </span>inner = current_process.inner_exclusive_access();
@@ -56,7 +52,7 @@
         MapArea::new(
             (FB_VADDR <span class="kw">as </span>usize).into(),
             (FB_VADDR + len <span class="kw">as </span>usize).into(),
-            MapType::Linear(pn_offset),
+            MapType::Linear(<span class="number">0</span>),
             MapPermission::R | MapPermission::W | MapPermission::U,
         ),
         <span class="prelude-val">None</span>,

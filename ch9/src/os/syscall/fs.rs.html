@@ -95,17 +95,13 @@
 <a href="#93" id="93">93</a>
 <a href="#94" id="94">94</a>
 <a href="#95" id="95">95</a>
-<a href="#96" id="96">96</a>
-<a href="#97" id="97">97</a>
-<a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::fs::{make_pipe, open_file, OpenFlags};
-<span class="kw">use </span><span class="kw">crate</span>::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
-<span class="kw">use </span><span class="kw">crate</span>::task::{current_process, current_user_token};
+<span class="kw">use </span><span class="kw">crate</span>::mm::{translated_byte_buffer, translated_refmut, translated_str};
+<span class="kw">use </span><span class="kw">crate</span>::task::current_process;
 <span class="kw">use </span>alloc::sync::Arc;
+<span class="kw">use </span>polyhal::pagetable::PageTable;
 
-<span class="kw">pub fn </span>sys_write(fd: usize, buf: <span class="kw-2">*const </span>u8, len: usize) -&gt; isize {
-    <span class="kw">let </span>token = current_user_token();
+<span class="kw">pub fn </span>sys_write(fd: usize, buf: <span class="kw-2">*mut </span>u8, len: usize) -&gt; isize {
     <span class="kw">let </span>process = current_process();
     <span class="kw">let </span>inner = process.inner_exclusive_access();
     <span class="kw">if </span>fd &gt;= inner.fd_table.len() {
@@ -118,14 +114,13 @@
         <span class="kw">let </span>file = file.clone();
         <span class="comment">// release current task TCB manually to avoid multi-borrow
         </span>drop(inner);
-        file.write(UserBuffer::new(translated_byte_buffer(token, buf, len))) <span class="kw">as </span>isize
+        file.write(translated_byte_buffer(PageTable::current(), buf, len)) <span class="kw">as </span>isize
     } <span class="kw">else </span>{
         -<span class="number">1
     </span>}
 }
 
-<span class="kw">pub fn </span>sys_read(fd: usize, buf: <span class="kw-2">*const </span>u8, len: usize) -&gt; isize {
-    <span class="kw">let </span>token = current_user_token();
+<span class="kw">pub fn </span>sys_read(fd: usize, buf: <span class="kw-2">*mut </span>u8, len: usize) -&gt; isize {
     <span class="kw">let </span>process = current_process();
     <span class="kw">let </span>inner = process.inner_exclusive_access();
     <span class="kw">if </span>fd &gt;= inner.fd_table.len() {
@@ -138,16 +133,14 @@
         }
         <span class="comment">// release current task TCB manually to avoid multi-borrow
         </span>drop(inner);
-        file.read(UserBuffer::new(translated_byte_buffer(token, buf, len))) <span class="kw">as </span>isize
+        file.read(translated_byte_buffer(PageTable::current(), buf, len)) <span class="kw">as </span>isize
     } <span class="kw">else </span>{
         -<span class="number">1
     </span>}
 }
-
 <span class="kw">pub fn </span>sys_open(path: <span class="kw-2">*const </span>u8, flags: u32) -&gt; isize {
     <span class="kw">let </span>process = current_process();
-    <span class="kw">let </span>token = current_user_token();
-    <span class="kw">let </span>path = translated_str(token, path);
+    <span class="kw">let </span>path = translated_str(PageTable::current(), path);
     <span class="kw">if let </span><span class="prelude-val">Some</span>(inode) = open_file(path.as_str(), OpenFlags::from_bits(flags).unwrap()) {
         <span class="kw">let </span><span class="kw-2">mut </span>inner = process.inner_exclusive_access();
         <span class="kw">let </span>fd = inner.alloc_fd();
@@ -173,15 +166,14 @@
 
 <span class="kw">pub fn </span>sys_pipe(pipe: <span class="kw-2">*mut </span>usize) -&gt; isize {
     <span class="kw">let </span>process = current_process();
-    <span class="kw">let </span>token = current_user_token();
     <span class="kw">let </span><span class="kw-2">mut </span>inner = process.inner_exclusive_access();
     <span class="kw">let </span>(pipe_read, pipe_write) = make_pipe();
     <span class="kw">let </span>read_fd = inner.alloc_fd();
     inner.fd_table[read_fd] = <span class="prelude-val">Some</span>(pipe_read);
     <span class="kw">let </span>write_fd = inner.alloc_fd();
     inner.fd_table[write_fd] = <span class="prelude-val">Some</span>(pipe_write);
-    <span class="kw-2">*</span>translated_refmut(token, pipe) = read_fd;
-    <span class="kw-2">*</span>translated_refmut(token, <span class="kw">unsafe </span>{ pipe.add(<span class="number">1</span>) }) = write_fd;
+    <span class="kw-2">*</span>translated_refmut(PageTable::current(), pipe) = read_fd;
+    <span class="kw-2">*</span>translated_refmut(PageTable::current(), <span class="kw">unsafe </span>{ pipe.add(<span class="number">1</span>) }) = write_fd;
     <span class="number">0
 </span>}
 
@@ -197,5 +189,4 @@
     <span class="kw">let </span>new_fd = inner.alloc_fd();
     inner.fd_table[new_fd] = <span class="prelude-val">Some</span>(Arc::clone(inner.fd_table[fd].as_ref().unwrap()));
     new_fd <span class="kw">as </span>isize
-}
-</code></pre></div></section></main></body></html>
+}</code></pre></div></section></main></body></html>
