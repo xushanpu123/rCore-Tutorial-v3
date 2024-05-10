@@ -144,8 +144,6 @@
 <a href="#142" id="142">142</a>
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
 </pre></div><pre class="rust"><code><span class="attr">#![no_std]
 #![no_main]
 #![feature(panic_info_message)]
@@ -224,8 +222,8 @@
             current_add_signal(SignalFlags::SIGILL);
         }
         Time =&gt; {
-            <span class="comment">// suspend_current_and_run_next();
-        </span>}
+            suspend_current_and_run_next();
+        }
         SupervisorExternal =&gt; {
             <span class="kw">let </span><span class="kw-2">mut </span>plic: PLIC = <span class="kw">unsafe </span>{ PLIC::new(VIRT_PLIC) };
             <span class="kw">let </span>intr_src_id = plic.claim(<span class="number">0</span>, IntrTargetPriority::Supervisor);
@@ -261,15 +259,13 @@
     });
     UART.init();
     <span class="macro">println!</span>(<span class="string">"KERN: init plic"</span>);
-    <span class="comment">// println!("KERN: init gpu");
-    // let _gpu = GPU_DEVICE.clone();
-    // println!("KERN: init keyboard");
-    // let _keyboard = KEYBOARD_DEVICE.clone();
-    // println!("KERN: init mouse");
-    // let _mouse = MOUSE_DEVICE.clone();
-    // println!("KERN: init trap");
-    // timer::set_next_trigger();
-    </span>board::device_init();
+    <span class="macro">println!</span>(<span class="string">"KERN: init gpu"</span>);
+    <span class="kw">let </span>_gpu = GPU_DEVICE.clone();
+    <span class="macro">println!</span>(<span class="string">"KERN: init keyboard"</span>);
+    <span class="kw">let </span>_keyboard = KEYBOARD_DEVICE.clone();
+    <span class="macro">println!</span>(<span class="string">"KERN: init mouse"</span>);
+    <span class="kw">let </span>_mouse = MOUSE_DEVICE.clone();
+    board::device_init();
     fs::list_apps();
     task::add_initproc();
     <span class="kw-2">*</span>DEV_NON_BLOCKING_ACCESS.exclusive_access() = <span class="bool-val">true</span>;

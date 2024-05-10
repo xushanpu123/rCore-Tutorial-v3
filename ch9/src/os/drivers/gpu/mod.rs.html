@@ -75,7 +75,7 @@
 <span class="kw">use </span>embedded_graphics::pixelcolor::Rgb888;
 <span class="kw">use </span>tinybmp::Bmp;
 <span class="kw">use </span>virtio_drivers::{VirtIOGpu, VirtIOHeader};
-<span class="kw">const </span>VIRTIO7: usize = <span class="number">0x10007000</span>;
+<span class="kw">const </span>VIRTIO7: usize = <span class="number">0x10007000 </span>+ <span class="number">0xffff_ffc0_0000_0000</span>;
 <span class="kw">pub trait </span>GpuDevice: Send + Sync + Any {
     <span class="kw">fn </span>update_cursor(<span class="kw-2">&amp;</span><span class="self">self</span>);
     <span class="kw">fn </span>get_framebuffer(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>[u8];
