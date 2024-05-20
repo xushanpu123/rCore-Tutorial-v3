@@ -1,12 +1,17 @@
+use core::mem::size_of;
+
 use super::ProcessControlBlock;
 use crate::config::{KERNEL_STACK_SIZE, PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT_BASE, USER_STACK_SIZE};
-use crate::mm::{MapPermission, PhysPageNum, VirtAddr, KERNEL_SPACE};
+use crate::mm::MapPermission;
 use crate::sync::UPSafeCell;
 use alloc::{
     sync::{Arc, Weak},
     vec::Vec,
 };
 use lazy_static::*;
+use log::{info, warn};
+use polyhal::addr::VirtAddr;
+use polyhal::TrapFrame;
 
 pub struct RecycleAllocator {
     current: usize,
@@ -67,48 +72,66 @@ pub fn kernel_stack_position(kstack_id: usize) -> (usize, usize) {
     (bottom, top)
 }
 
-pub struct KernelStack(pub usize);
-
-pub fn kstack_alloc() -> KernelStack {
-    let kstack_id = KSTACK_ALLOCATOR.exclusive_access().alloc();
-    let (kstack_bottom, kstack_top) = kernel_stack_position(kstack_id);
-    KERNEL_SPACE.exclusive_access().insert_framed_area(
-        kstack_bottom.into(),
-        kstack_top.into(),
-        MapPermission::R | MapPermission::W,
-    );
-    KernelStack(kstack_id)
-}
-
-impl Drop for KernelStack {
-    fn drop(&mut self) {
-        let (kernel_stack_bottom, _) = kernel_stack_position(self.0);
-        let kernel_stack_bottom_va: VirtAddr = kernel_stack_bottom.into();
-        KERNEL_SPACE
-            .exclusive_access()
-            .remove_area_with_start_vpn(kernel_stack_bottom_va.into());
-        KSTACK_ALLOCATOR.exclusive_access().dealloc(self.0);
-    }
+// pub struct KernelStack(pub usize);
+pub struct KernelStack {
+    inner: Arc<[u128; KERNEL_STACK_SIZE / size_of::<u128>()]>,
 }
 
 impl KernelStack {
-    #[allow(unused)]
-    pub fn push_on_top<T>(&self, value: T) -> *mut T
-    where
-        T: Sized,
-    {
-        let kernel_stack_top = self.get_top();
-        let ptr_mut = (kernel_stack_top - core::mem::size_of::<T>()) as *mut T;
-        unsafe {
-            *ptr_mut = value;
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new([0u128; KERNEL_STACK_SIZE / size_of::<u128>()]),
         }
-        ptr_mut
     }
-    pub fn get_top(&self) -> usize {
-        let (_, kernel_stack_top) = kernel_stack_position(self.0);
-        kernel_stack_top
+
+    pub fn get_position(&self) -> (usize, usize) {
+        let bottom = self.inner.as_ptr() as usize;
+        (bottom, bottom + KERNEL_STACK_SIZE)
     }
 }
+
+// pub fn kstack_alloc() -> KernelStack {
+//     let kstack_id = KSTACK_ALLOCATOR.exclusive_access().alloc();
+//     let (kstack_bottom, kstack_top) = kernel_stack_position(kstack_id);
+//     // KERNEL_SPACE.exclusive_access().insert_framed_area(
+//     //     kstack_bottom.into(),
+//     //     kstack_top.into(),
+//     //     MapPermission::R | MapPermission::W,
+//     // );
+//     todo!("alloc kernel stack");
+//     KernelStack(kstack_id)
+// }
+
+// impl Drop for KernelStack {
+//     fn drop(&mut self) {
+//         let (kernel_stack_bottom, _) = kernel_stack_position(self.0);
+//         let kernel_stack_bottom_va: VirtAddr = kernel_stack_bottom.into();
+//         // KERNEL_SPACE
+//         //     .exclusive_access()
+//         //     .remove_area_with_start_vpn(kernel_stack_bottom_va.into());
+//         todo!("drop kernel stack");
+//         KSTACK_ALLOCATOR.exclusive_access().dealloc(self.0);
+//     }
+// }
+
+// impl KernelStack {
+//     #[allow(unused)]
+//     pub fn push_on_top<T>(&self, value: T) -> *mut T
+//     where
+//         T: Sized,
+//     {
+//         let kernel_stack_top = self.get_top();
+//         let ptr_mut = (kernel_stack_top - core::mem::size_of::<T>()) as *mut T;
+//         unsafe {
+//             *ptr_mut = value;
+//         }
+//         ptr_mut
+//     }
+//     pub fn get_top(&self) -> usize {
+//         let (_, kernel_stack_top) = kernel_stack_position(self.0);
+//         kernel_stack_top
+//     }
+// }
 
 pub struct TaskUserRes {
     pub tid: usize,
@@ -148,18 +171,11 @@ impl TaskUserRes {
         // alloc user stack
         let ustack_bottom = ustack_bottom_from_tid(self.ustack_base, self.tid);
         let ustack_top = ustack_bottom + USER_STACK_SIZE;
+        info!("user stack {:#x} - {:#x}", ustack_bottom, ustack_top);
         process_inner.memory_set.insert_framed_area(
             ustack_bottom.into(),
             ustack_top.into(),
             MapPermission::R | MapPermission::W | MapPermission::U,
-        );
-        // alloc trap_cx
-        let trap_cx_bottom = trap_cx_bottom_from_tid(self.tid);
-        let trap_cx_top = trap_cx_bottom + PAGE_SIZE;
-        process_inner.memory_set.insert_framed_area(
-            trap_cx_bottom.into(),
-            trap_cx_top.into(),
-            MapPermission::R | MapPermission::W,
         );
     }
 
@@ -199,15 +215,21 @@ impl TaskUserRes {
         trap_cx_bottom_from_tid(self.tid)
     }
 
-    pub fn trap_cx_ppn(&self) -> PhysPageNum {
+    pub fn trap_cx_ppn(&self) -> &'static mut TrapFrame {
         let process = self.process.upgrade().unwrap();
         let process_inner = process.inner_exclusive_access();
-        let trap_cx_bottom_va: VirtAddr = trap_cx_bottom_from_tid(self.tid).into();
-        process_inner
-            .memory_set
-            .translate(trap_cx_bottom_va.into())
-            .unwrap()
-            .ppn()
+        let task = process_inner.tasks[self.tid].as_ref().unwrap().clone();
+        // todo!("trap_cx_ppn")
+        warn!("trap_cx_ppn will return trap frame");
+        let tref = task.inner_exclusive_access().get_trap_cx();
+        // let trap_cx_bottom_va: VirtAddr = trap_cx_bottom_from_tid(self.tid).into();
+        // process_inner
+        //     .memory_set
+        //     .translate(trap_cx_bottom_va.into())
+        //     .unwrap()
+        //     .0
+        drop(task);
+        tref
     }
 
     pub fn ustack_base(&self) -> usize {

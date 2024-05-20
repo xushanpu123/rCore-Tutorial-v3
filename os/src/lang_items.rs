@@ -1,4 +1,3 @@
-use crate::sbi::shutdown;
 use crate::task::current_kstack_top;
 use core::arch::asm;
 use core::panic::PanicInfo;
@@ -16,10 +15,10 @@ fn panic(info: &PanicInfo) -> ! {
     } else {
         error!("[kernel] Panicked: {}", info.message().unwrap());
     }
-    unsafe {
-        backtrace();
-    }
-    shutdown(true)
+    // unsafe {
+    //     backtrace();
+    // }
+    polyhal::shutdown();
 }
 
 unsafe fn backtrace() {

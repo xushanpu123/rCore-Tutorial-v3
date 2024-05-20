@@ -32,18 +32,20 @@ mod sync;
 mod thread;
 
 use fs::*;
+use log::info;
 use process::*;
 use sync::*;
 use thread::*;
 
 pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
+    // info!("syscall id: {}", syscall_id);
     match syscall_id {
         SYSCALL_DUP => sys_dup(args[0]),
         SYSCALL_OPEN => sys_open(args[0] as *const u8, args[1] as u32),
         SYSCALL_CLOSE => sys_close(args[0]),
         SYSCALL_PIPE => sys_pipe(args[0] as *mut usize),
-        SYSCALL_READ => sys_read(args[0], args[1] as *const u8, args[2]),
-        SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
+        SYSCALL_READ => sys_read(args[0], args[1] as *mut u8, args[2]),
+        SYSCALL_WRITE => sys_write(args[0], args[1] as *mut u8, args[2]),
         SYSCALL_EXIT => sys_exit(args[0] as i32),
         SYSCALL_SLEEP => sys_sleep(args[0]),
         SYSCALL_YIELD => sys_yield(),

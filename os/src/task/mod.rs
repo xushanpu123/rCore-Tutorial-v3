@@ -1,29 +1,25 @@
-mod context;
 mod id;
 mod manager;
 mod process;
 mod processor;
 mod signal;
-mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
 use self::id::TaskUserRes;
 use crate::fs::{open_file, OpenFlags};
-use crate::sbi::shutdown;
-use crate::timer::remove_timer;
 use alloc::{sync::Arc, vec::Vec};
 use lazy_static::*;
+use log::info;
 use manager::fetch_task;
+use polyhal::{run_user_task, KContext, TrapFrame};
 use process::ProcessControlBlock;
-use switch::__switch;
 
-pub use context::TaskContext;
-pub use id::{kstack_alloc, pid_alloc, KernelStack, PidHandle, IDLE_PID};
+pub use id::{pid_alloc, KernelStack, PidHandle, IDLE_PID};
 pub use manager::{add_task, pid2process, remove_from_pid2process, remove_task, wakeup_task};
 pub use processor::{
-    current_kstack_top, current_process, current_task, current_trap_cx, current_trap_cx_user_va,
-    current_user_token, run_tasks, schedule, take_current_task,
+    current_kstack_top, current_process, current_task,
+    run_tasks, schedule, take_current_task,
 };
 pub use signal::SignalFlags;
 pub use task::{TaskControlBlock, TaskStatus};
@@ -34,7 +30,7 @@ pub fn suspend_current_and_run_next() {
 
     // ---- access current TCB exclusively
     let mut task_inner = task.inner_exclusive_access();
-    let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
+    let task_cx_ptr = &mut task_inner.task_cx as *mut KContext;
     // Change status to Ready
     task_inner.task_status = TaskStatus::Ready;
     drop(task_inner);
@@ -49,10 +45,24 @@ pub fn suspend_current_and_run_next() {
 pub fn block_current_and_run_next() {
     let task = take_current_task().unwrap();
     let mut task_inner = task.inner_exclusive_access();
-    let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
+    let task_cx_ptr = &mut task_inner.task_cx as *mut KContext;
     task_inner.task_status = TaskStatus::Blocked;
     drop(task_inner);
     schedule(task_cx_ptr);
+}
+
+fn task_entry() {
+    log::trace!("os::task::task_entry");
+    let task = current_task()
+        .unwrap()
+        .inner_exclusive_access()
+        .get_trap_cx() as *mut TrapFrame;
+    // run_user_task_forever(unsafe { task.as_mut().unwrap() })
+    let ctx_mut = unsafe { task.as_mut().unwrap() };
+    // info!("ctx_mut: {:#x?}", ctx_mut);
+    loop {
+        run_user_task(ctx_mut);
+    }
 }
 
 /// Exit the current 'Running' task and run the next task in task list.
@@ -79,10 +89,10 @@ pub fn exit_current_and_run_next(exit_code: i32) {
             );
             if exit_code != 0 {
                 //crate::sbi::shutdown(255); //255 == -1 for err hint
-                shutdown(true);
+                polyhal::shutdown();
             } else {
                 //crate::sbi::shutdown(0); //0 for success hint
-                shutdown(false);
+                polyhal::shutdown();
             }
         }
         remove_from_pid2process(pid);
@@ -141,7 +151,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     }
     drop(process);
     // we do not have to save task context
-    let mut _unused = TaskContext::zero_init();
+    let mut _unused = KContext::blank();
     schedule(&mut _unused as *mut _);
 }
 
@@ -171,5 +181,6 @@ pub fn current_add_signal(signal: SignalFlags) {
 
 pub fn remove_inactive_task(task: Arc<TaskControlBlock>) {
     remove_task(Arc::clone(&task));
-    remove_timer(Arc::clone(&task));
+    // FIXME: Timer 
+    // remove_timer(Arc::clone(&task));
 }
