@@ -17,10 +17,19 @@ SECTIONS
         *(.srodata .srodata.*)
     }
     . = ALIGN(4K);
+    .eh_frame_hdr : {
+        *(.eh_frame_hdr .eh_frame_hdr.*)
+    }
+    . = ALIGN(4K);
     .data : {
         *(.data .data.*)
         *(.sdata .sdata.*)
     }
+    . = ALIGN(4K);
+    .got : {
+        *(.got .got.*)
+    }
+    . = ALIGN(4K);
     .bss : {
         *(.bss .bss.*)
         *(.sbss .sbss.*)
