@@ -33,6 +33,10 @@ SECTIONS
         *(.sdata .sdata.*)
         _edata = .;
     }
+        . = ALIGN(4K);
+    .got : {
+        *(.got .got.*)
+    }
 
     .sigtrx ALIGN(4K): {
         *(.sigtrx .sigtrx.*)
